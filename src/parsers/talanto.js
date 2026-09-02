@@ -22,9 +22,20 @@ function isPremiumCard(text) {
         "только по подписке"
     ];
 
-    return premiumKeywords.some(keyword =>
-        normalized.includes(keyword)
-    );
+    if (premiumKeywords.some(keyword => normalized.includes(keyword))) {
+        return true;
+    }
+
+    /*
+     * После обновления Talanto вакансии, доступные только по платной
+     * подписке, помечаются звёздочкой (*) прямо в названии/карточке
+     * вместо старого текстового лейбла. Ловим и это.
+     */
+    if (String(text || "").includes("*")) {
+        return true;
+    }
+
+    return false;
 }
 
 function parseCompanyAndPosition(label) {
