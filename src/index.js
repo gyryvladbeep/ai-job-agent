@@ -5,7 +5,6 @@ const { getTelegramWebJobs } = require("./parsers/telegramWeb");
 const { getHabrCareerJobs } = require("./parsers/habrCareer");
 const { getGeekJobJobs } = require("./parsers/geekjob");
 const { getItaJobs } = require("./parsers/itaJobs");
-const { getIndeedJobs } = require("./parsers/indeed");
 const { getRemoteOkJobs } = require("./parsers/remoteOk");
 const { getWellfoundJobs } = require("./parsers/wellfound");
 const {
@@ -134,18 +133,6 @@ async function collectJobs() {
 
     allJobs.push(...itaJobs);
 
-
-    // ==========================================
-    // 6. INDEED
-    // ==========================================
-
-    const indeedJobs =
-        await collectFromSource(
-            "Indeed",
-            getIndeedJobs
-        );
-
-    allJobs.push(...indeedJobs);
 
 
     // ==========================================

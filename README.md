@@ -4,7 +4,7 @@ A personal automation tool that scrapes multiple job boards and Telegram channel
 
 ## What it does
 
-1. **Collects** vacancies in parallel from 9 sources: Talanto, Telegram (public channels), Habr Career, GeekJob, ITA Jobs, Indeed, Remote OK, Wellfound, We Work Remotely.
+1. **Collects** vacancies in parallel from 8 sources: Talanto, Telegram (public channels), Habr Career, GeekJob, ITA Jobs, Remote OK, Wellfound, We Work Remotely.
 2. **Filters** results down to QA/testing-relevant roles using a bilingual (RU/EN) keyword matcher, with an exclusion list to keep out adjacent roles (developers, analysts, DevOps, etc.).
 3. **Deduplicates** by URL.
 4. **Checks Supabase** for vacancies already seen in previous runs.
@@ -51,6 +51,8 @@ Required environment variables (see `.env.example`):
 ## Roadmap
 
 - [ ] HeadHunter (hh.ru) parser — currently a stub, not implemented
+- [ ] Indeed parser — disabled for now, Indeed's bot-verification flow blocks headless scraping (source code kept locally in `_legacy/`, not in this repo)
+- [ ] LinkedIn — intentionally not scraped: LinkedIn actively detects and bans automation, not worth the account risk
 - [ ] Scheduled runs via `node-cron` instead of manual invocation
 - [ ] Scoring/ranking of matches (stack fit, salary, remote/relocation) instead of a flat keyword filter
 
