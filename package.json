@@ -1,0 +1,22 @@
+{
+  "name": "ai-job-agent",
+  "version": "1.0.0",
+  "description": "Automated multi-source QA job aggregator: scrapes job boards and Telegram channels, filters for QA/testing roles, dedupes against Supabase, and pushes new matches to Telegram.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.2",
+    "dotenv": "^17.4.2",
+    "input": "^1.0.1",
+    "node-cron": "^4.6.0",
+    "node-telegram-bot-api": "^1.2.0",
+    "playwright": "^1.62.1",
+    "telegram": "^2.26.22"
+  }
+}

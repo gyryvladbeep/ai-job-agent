@@ -1,0 +1,16 @@
+# dependencies
+node_modules/
+
+# secrets
+.env
+
+# debug artifacts
+*.png
+*.log
+
+# local-only / archived code
+_legacy/
+
+# OS
+.DS_Store
+Thumbs.db
