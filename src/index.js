@@ -479,5 +479,6 @@ async function processJobs() {
     console.log("");
 }
 
-
-processJobs();  
+module.exports = {
+    processJobs,
+};

@@ -11,6 +11,8 @@ A personal automation tool that scrapes multiple job boards and Telegram channel
 5. **Saves** new vacancies to Supabase.
 6. **Notifies** via a Telegram bot for every genuinely new match.
 
+Runs on a schedule (`src/scheduler.js`, via `node-cron`): every day at **10:00, 15:00, and 20:00 Yerevan time (Asia/Yerevan)**. Keep `npm start` running as a long-lived process (pm2, a systemd service, or Windows Task Scheduler running it at login) and it triggers itself — no manual invocation needed.
+
 Each source is isolated in its own try/catch — if one parser breaks (a site changes its markup), the rest of the pipeline keeps running.
 
 ## Tech stack
@@ -40,7 +42,8 @@ src/
 npm install
 cp .env.example .env   # fill in your own Supabase + Telegram credentials
 npx playwright install  # first run only, downloads browser binaries
-npm start
+npm start               # starts the scheduler (10:00 / 15:00 / 20:00 Yerevan time)
+npm run once            # or: run the pipeline a single time immediately, no scheduling
 ```
 
 Required environment variables (see `.env.example`):
@@ -53,7 +56,6 @@ Required environment variables (see `.env.example`):
 - [ ] HeadHunter (hh.ru) parser — currently a stub, not implemented
 - [ ] Indeed parser — disabled for now, Indeed's bot-verification flow blocks headless scraping (source code kept locally in `_legacy/`, not in this repo)
 - [ ] LinkedIn — intentionally not scraped: LinkedIn actively detects and bans automation, not worth the account risk
-- [ ] Scheduled runs via `node-cron` instead of manual invocation
 - [ ] Scoring/ranking of matches (stack fit, salary, remote/relocation) instead of a flat keyword filter
 
 ## Status

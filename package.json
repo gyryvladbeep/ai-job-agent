@@ -4,7 +4,8 @@
   "description": "Automated multi-source QA job aggregator: scrapes job boards and Telegram channels, filters for QA/testing roles, dedupes against Supabase, and pushes new matches to Telegram.",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "once": "node -e \"require('./src/index').processJobs()\""
   },
   "keywords": [],
   "author": "",
