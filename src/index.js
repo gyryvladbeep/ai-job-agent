@@ -7,6 +7,8 @@ const { getGeekJobJobs } = require("./parsers/geekjob");
 const { getItaJobs } = require("./parsers/itaJobs");
 const { getRemoteOkJobs } = require("./parsers/remoteOk");
 const { getWellfoundJobs } = require("./parsers/wellfound");
+const { getWorkingNomadsJobs } = require("./parsers/workingNomads");
+const { getFlexJobsJobs } = require("./parsers/flexJobs");
 const {
     getWeWorkRemotelyJobs
 } = require("./parsers/weWorkRemotely");
@@ -172,6 +174,31 @@ async function collectJobs() {
         );
 
     allJobs.push(...wwrJobs);
+
+    // ==========================================
+    // 10. WORKING NOMADS
+    // ==========================================
+
+    const workingNomadsJobs =
+        await collectFromSource(
+            "Working Nomads",
+            getWorkingNomadsJobs
+        );
+
+    allJobs.push(...workingNomadsJobs);
+
+
+    // ==========================================
+    // 11. FLEXJOBS
+    // ==========================================
+
+    const flexJobsJobs =
+        await collectFromSource(
+            "FlexJobs",
+            getFlexJobsJobs
+        );
+
+    allJobs.push(...flexJobsJobs);
 
 
     // ==========================================
