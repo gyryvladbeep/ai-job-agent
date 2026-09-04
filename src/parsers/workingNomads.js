@@ -1,3 +1,4 @@
+const fs = require("fs");
 const { chromium } = require("playwright");
 
 // Working Nomads groups remote jobs by category via path segments,
@@ -50,11 +51,17 @@ async function getWorkingNomadsJobs() {
          * вёрстку), поэтому пробуем несколько вариантов селекторов
          * для строк списка вакансий -- как и в остальных парсерах.
          */
+        /*
+         * Подтверждено вручную (см. workingnomads-debug.html): каждая
+         * карточка -- это сам <a id="job-N" class="job-desktop ...">,
+         * а не обёртка с вложенной ссылкой. Держим старые варианты
+         * вторым/третьим приоритетом на случай, если вёрстку поменяют.
+         */
         const rowSelectors = [
+            "a.job-desktop",
             "li.job",
             ".jobs-list li",
             "[class*='job-list'] li",
-            "article",
             "[class*='JobListing']"
         ];
 
@@ -90,6 +97,15 @@ async function getWorkingNomadsJobs() {
             console.log(
                 "📸 Screenshot saved: workingnomads-debug.png"
             );
+
+            try {
+                const html = await page.content();
+                fs.writeFileSync("workingnomads-debug.html", html, "utf-8");
+                console.log("📄 HTML saved: workingnomads-debug.html");
+            } catch (dumpError) {
+                console.log("⚠️ Could not save debug HTML");
+                console.log(dumpError?.message || dumpError);
+            }
 
             return [];
         }
@@ -130,14 +146,24 @@ async function getWorkingNomadsJobs() {
                     continue;
                 }
 
-                let href = null;
+                /*
+                 * На job-desktop карточках сама карточка -- это <a>,
+                 * так что href нужно брать с неё, а не искать вложенную
+                 * ссылку (которой может не быть или которая ведёт на
+                 * тег/категорию, а не на вакансию).
+                 */
+                let href = await row
+                    .getAttribute("href")
+                    .catch(() => null);
 
-                const link = row.locator("a").first();
+                if (!href) {
+                    const link = row.locator("a").first();
 
-                if (await link.count()) {
-                    href = await link
-                        .getAttribute("href")
-                        .catch(() => null);
+                    if (await link.count()) {
+                        href = await link
+                            .getAttribute("href")
+                            .catch(() => null);
+                    }
                 }
 
                 if (!href) {
@@ -204,6 +230,18 @@ async function getWorkingNomadsJobs() {
     } catch (error) {
         console.error("❌ Working Nomads parser error:");
         console.error(error?.message || error);
+
+        try {
+            await page.screenshot({
+                path: "workingnomads-error.png",
+                fullPage: true
+            });
+            const html = await page.content();
+            fs.writeFileSync("workingnomads-error.html", html, "utf-8");
+            console.log("📸 Error screenshot + HTML saved");
+        } catch (dumpError) {
+            console.log("⚠️ Could not save error debug artifacts");
+        }
 
         return [];
     } finally {

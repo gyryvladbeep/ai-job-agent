@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "once": "node -e \"require('./src/index').processJobs()\""
+    "once": "node -e \"require('./src/index').processJobs()\"",
+    "debug:new-sources": "node src/debugNewSources.js"
   },
   "keywords": [],
   "author": "",

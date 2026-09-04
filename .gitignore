@@ -7,6 +7,9 @@ node_modules/
 # debug artifacts
 *.png
 *.log
+*-debug.html
+*-error.html
+logs/
 
 # local-only / archived code
 _legacy/

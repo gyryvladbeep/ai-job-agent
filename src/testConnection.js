@@ -15,4 +15,4 @@ async function test() {
     console.table(data);
 }
 
-test(); I sounds.
+test();

@@ -18,7 +18,17 @@ const { chromium } = require("playwright");
 const TELEGRAM_CHANNELS = [
 
     // ======================================
-    // EXISTING QA CHANNELS
+    // VERIFIED QA / IT JOB CHANNELS
+    // ======================================
+    //
+    // Checked manually on 2026-09-04 (fetched each
+    // https://t.me/s/<username> and confirmed it's a real channel
+    // with actual posted messages, not an empty contact-card page).
+    // 11 previously-listed channels turned out to be guessed
+    // usernames that don't exist (qa_jobs_ru, qa_jobs_channel,
+    // qa_jobs_tg, it_jobs, it_vacancies, it_job, it_jobs_ru,
+    // remote_jobs, dev_jobs, ru_it_jobs, rabota_it) -- every run was
+    // silently opening 11 dead pages for nothing. Removed.
     // ======================================
 
     "qa_jobs",
@@ -28,28 +38,11 @@ const TELEGRAM_CHANNELS = [
     "youritjob",
     "jobforjunior",
     "qa_rab",
-
-
-    // ======================================
-    // ADDITIONAL QA / IT JOB CHANNELS
-    // ======================================
-
-    "qa_jobs_ru",
-    "qa_jobs_channel",
-    "qa_jobs_tg",
     "qa_vacancies",
     "qa_job",
     "qa_work",
-    "it_jobs",
-    "it_vacancies",
-    "it_job",
-    "it_jobs_ru",
     "remote_jobs_ru",
-    "remoteit",
-    "remote_jobs",
-    "dev_jobs",
-    "ru_it_jobs",
-    "rabota_it"
+    "remoteit"
 ];
 
 
@@ -471,6 +464,41 @@ async function parseTelegramChannel(
             page.locator(
                 ".tgme_widget_message"
             );
+
+
+        /*
+         * t.me/s/<channel> only renders ~20 latest messages until you
+         * scroll up, which lazy-loads older history via XHR. Without
+         * this loop we were only ever reading the initial ~20
+         * regardless of MESSAGES_PER_CHANNEL. Scroll the message list
+         * to the top repeatedly until the count stops growing (channel
+         * exhausted) or we hit the target.
+         */
+        let previousCount = await messages.count();
+
+        for (
+            let scrollAttempt = 0;
+            scrollAttempt < 12 &&
+                previousCount < MESSAGES_PER_CHANNEL;
+            scrollAttempt++
+        ) {
+
+            await page.evaluate(() => {
+                window.scrollTo(0, 0);
+            });
+
+            await page.waitForTimeout(800);
+
+            const newCount = await messages.count();
+
+            if (newCount <= previousCount) {
+                // Дошли до начала истории канала — больше
+                // сообщений не подгружается.
+                break;
+            }
+
+            previousCount = newCount;
+        }
 
 
         const count =

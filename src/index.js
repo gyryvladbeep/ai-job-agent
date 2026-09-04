@@ -8,7 +8,6 @@ const { getItaJobs } = require("./parsers/itaJobs");
 const { getRemoteOkJobs } = require("./parsers/remoteOk");
 const { getWellfoundJobs } = require("./parsers/wellfound");
 const { getWorkingNomadsJobs } = require("./parsers/workingNomads");
-const { getFlexJobsJobs } = require("./parsers/flexJobs");
 const {
     getWeWorkRemotelyJobs
 } = require("./parsers/weWorkRemotely");
@@ -22,6 +21,8 @@ const {
 const { sendJob } = require("./services/telegram");
 
 const { filterQaJobs } = require("./utils/qaFilter");
+
+const { writeRunSummary } = require("./services/runLog");
 
 
 async function collectFromSource(name, parser) {
@@ -62,6 +63,26 @@ async function collectFromSource(name, parser) {
 
 async function collectJobs() {
 
+    // ==========================================
+    // SOURCES
+    // ==========================================
+    //
+    // One entry per source -- add/remove a source here only, instead
+    // of a whole copy-pasted block. Order is just display order.
+    // ==========================================
+
+    const SOURCES = [
+        { name: "Talanto", parser: getTalantoJobs },
+        { name: "Telegram", parser: getTelegramWebJobs },
+        { name: "Habr Career", parser: getHabrCareerJobs },
+        { name: "GeekJob", parser: getGeekJobJobs },
+        { name: "ITA Jobs", parser: getItaJobs },
+        { name: "Remote OK", parser: getRemoteOkJobs },
+        { name: "Wellfound", parser: getWellfoundJobs },
+        { name: "We Work Remotely", parser: getWeWorkRemotelyJobs },
+        { name: "Working Nomads", parser: getWorkingNomadsJobs }
+    ];
+
     console.log("");
     console.log(
         "🔎 Collecting vacancies from all sources..."
@@ -69,141 +90,15 @@ async function collectJobs() {
     console.log("");
 
     const allJobs = [];
+    const bySource = {};
 
+    for (const { name, parser } of SOURCES) {
+        const jobs = await collectFromSource(name, parser);
 
-    // ==========================================
-    // 1. TALANTO
-    // ==========================================
+        bySource[name] = jobs.length;
 
-    const talantoJobs =
-        await collectFromSource(
-            "Talanto",
-            getTalantoJobs
-        );
-
-    allJobs.push(...talantoJobs);
-
-
-    // ==========================================
-    // 2. TELEGRAM
-    // ==========================================
-
-    const telegramJobs =
-        await collectFromSource(
-            "Telegram",
-            getTelegramWebJobs
-        );
-
-    allJobs.push(...telegramJobs);
-
-
-    // ==========================================
-    // 3. HABR CAREER
-    // ==========================================
-
-    const habrJobs =
-        await collectFromSource(
-            "Habr Career",
-            getHabrCareerJobs
-        );
-
-    allJobs.push(...habrJobs);
-
-
-    // ==========================================
-    // 4. GEEKJOB
-    // ==========================================
-
-    const geekJobJobs =
-        await collectFromSource(
-            "GeekJob",
-            getGeekJobJobs
-        );
-
-    allJobs.push(...geekJobJobs);
-
-
-    // ==========================================
-    // 5. ITA JOBS
-    // ==========================================
-
-    const itaJobs =
-        await collectFromSource(
-            "ITA Jobs",
-            getItaJobs
-        );
-
-    allJobs.push(...itaJobs);
-
-
-
-    // ==========================================
-    // 7. REMOTE OK
-    // ==========================================
-
-    const remoteOkJobs =
-        await collectFromSource(
-            "Remote OK",
-            getRemoteOkJobs
-        );
-
-    allJobs.push(...remoteOkJobs);
-
-
-    // ==========================================
-    // 8. WELLFOUND
-    // ==========================================
-
-    const wellfoundJobs =
-        await collectFromSource(
-            "Wellfound",
-            getWellfoundJobs
-        );
-
-    allJobs.push(...wellfoundJobs);
-
-
-    // ==========================================
-    // 9. WE WORK REMOTELY
-    // ==========================================
-
-    const wwrJobs =
-        await collectFromSource(
-            "We Work Remotely",
-            getWeWorkRemotelyJobs
-        );
-
-    allJobs.push(...wwrJobs);
-
-    // ==========================================
-    // 10. WORKING NOMADS
-    // ==========================================
-
-    const workingNomadsJobs =
-        await collectFromSource(
-            "Working Nomads",
-            getWorkingNomadsJobs
-        );
-
-    allJobs.push(...workingNomadsJobs);
-
-
-    // ==========================================
-    // 11. FLEXJOBS
-    // ==========================================
-
-    const flexJobsJobs =
-        await collectFromSource(
-            "FlexJobs",
-            getFlexJobsJobs
-        );
-
-    allJobs.push(...flexJobsJobs);
-
-
-    // ==========================================
-    // TOTAL
-    // ==========================================
+        allJobs.push(...jobs);
+    }
 
     console.log("");
     console.log("================================");
@@ -212,9 +107,8 @@ async function collectJobs() {
     );
     console.log("================================");
 
-    return allJobs;
+    return { allJobs, bySource };
 }
-
 
 async function processJobs() {
 
@@ -222,6 +116,22 @@ async function processJobs() {
     console.log("🚀 AI Job Agent started");
     console.log("================================");
 
+    // Filled in as we go, written to logs/ no matter where the run
+    // stops -- see src/services/runLog.js. This is what lets a run's
+    // numbers be inspected later without having watched the terminal
+    // when the scheduler fired.
+    const runSummary = {
+        bySource: {},
+        collected: 0,
+        qaFiltered: 0,
+        unique: 0,
+        new: 0,
+        saved: 0,
+        notified: 0,
+        notificationErrors: 0,
+        stoppedAt: "started",
+        error: null
+    };
 
     try {
 
@@ -229,9 +139,11 @@ async function processJobs() {
         // 1. COLLECT
         // ==========================================
 
-        const collectedJobs =
+        const { allJobs: collectedJobs, bySource } =
             await collectJobs();
 
+        runSummary.bySource = bySource;
+        runSummary.collected = collectedJobs.length;
 
         if (collectedJobs.length === 0) {
 
@@ -239,6 +151,9 @@ async function processJobs() {
             console.log(
                 "ℹ️ No jobs collected from any source"
             );
+
+            runSummary.stoppedAt = "collect";
+            writeRunSummary(runSummary);
 
             return;
         }
@@ -262,12 +177,17 @@ async function processJobs() {
             `🎯 QA jobs after filtering: ${qaJobs.length}`
         );
 
+        runSummary.qaFiltered = qaJobs.length;
+
 
         if (qaJobs.length === 0) {
 
             console.log(
                 "ℹ️ No QA jobs after filtering"
             );
+
+            runSummary.stoppedAt = "qaFilter";
+            writeRunSummary(runSummary);
 
             return;
         }
@@ -294,6 +214,8 @@ async function processJobs() {
         console.log(
             `🧹 Unique jobs: ${uniqueJobs.length}`
         );
+
+        runSummary.unique = uniqueJobs.length;
 
 
         // ==========================================
@@ -349,12 +271,17 @@ async function processJobs() {
             `🆕 New jobs found: ${newJobs.length}`
         );
 
+        runSummary.new = newJobs.length;
+
 
         if (newJobs.length === 0) {
 
             console.log(
                 "ℹ️ No new jobs to save or send"
             );
+
+            runSummary.stoppedAt = "dedupe";
+            writeRunSummary(runSummary);
 
             return;
         }
@@ -383,6 +310,8 @@ async function processJobs() {
                 `💾 Saved to Supabase: ${savedJobs.length}`
             );
 
+            runSummary.saved = savedJobs.length;
+
         } catch (error) {
 
             console.error(
@@ -392,6 +321,10 @@ async function processJobs() {
             console.error(
                 error?.message || error
             );
+
+            runSummary.stoppedAt = "save";
+            runSummary.error = error?.message || String(error);
+            writeRunSummary(runSummary);
 
             return;
         }
@@ -445,6 +378,10 @@ async function processJobs() {
             }
         }
 
+        runSummary.notified = notified;
+        runSummary.notificationErrors = failed;
+        runSummary.stoppedAt = "complete";
+
 
         // ==========================================
         // 7. FINAL SUMMARY
@@ -485,6 +422,8 @@ async function processJobs() {
 
         console.log("================================");
 
+        writeRunSummary(runSummary);
+
 
     } catch (error) {
 
@@ -496,6 +435,10 @@ async function processJobs() {
         console.error(
             error?.message || error
         );
+
+        runSummary.stoppedAt = "fatal";
+        runSummary.error = error?.message || String(error);
+        writeRunSummary(runSummary);
     }
 
 
@@ -505,6 +448,7 @@ async function processJobs() {
     );
     console.log("");
 }
+
 
 module.exports = {
     processJobs,
