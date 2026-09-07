@@ -8,9 +8,10 @@ const { getItaJobs } = require("./parsers/itaJobs");
 const { getRemoteOkJobs } = require("./parsers/remoteOk");
 const { getWellfoundJobs } = require("./parsers/wellfound");
 const { getWorkingNomadsJobs } = require("./parsers/workingNomads");
+const { getHimalayasJobs } = require("./parsers/himalayas");
 const {
-    getWeWorkRemotelyJobs
-} = require("./parsers/weWorkRemotely");
+    getMinistryOfTestingJobs
+} = require("./parsers/ministryOfTesting");
 
 const {
     jobExists,
@@ -79,8 +80,9 @@ async function collectJobs() {
         { name: "ITA Jobs", parser: getItaJobs },
         { name: "Remote OK", parser: getRemoteOkJobs },
         { name: "Wellfound", parser: getWellfoundJobs },
-        { name: "We Work Remotely", parser: getWeWorkRemotelyJobs },
-        { name: "Working Nomads", parser: getWorkingNomadsJobs }
+        { name: "Working Nomads", parser: getWorkingNomadsJobs },
+        { name: "Himalayas", parser: getHimalayasJobs },
+        { name: "Ministry of Testing", parser: getMinistryOfTestingJobs }
     ];
 
     console.log("");
@@ -122,6 +124,7 @@ async function processJobs() {
     // when the scheduler fired.
     const runSummary = {
         bySource: {},
+        newBySource: {},
         collected: 0,
         qaFiltered: 0,
         unique: 0,
@@ -272,6 +275,18 @@ async function processJobs() {
         );
 
         runSummary.new = newJobs.length;
+
+        // Разбивка "new" по источникам -- это то, что реально отвечает
+        // на вопрос "откуда пришли сегодняшние уведомления", в отличие
+        // от bySource выше (это сырые цифры ДО QA-фильтра и дедупа
+        // против Supabase, почти всегда сильно больше и не показывает,
+        // что из этого реально дошло до Telegram).
+        const newBySource = {};
+        for (const job of newJobs) {
+            const key = job.source || "Unknown";
+            newBySource[key] = (newBySource[key] || 0) + 1;
+        }
+        runSummary.newBySource = newBySource;
 
 
         if (newJobs.length === 0) {

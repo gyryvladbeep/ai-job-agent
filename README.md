@@ -4,7 +4,7 @@ A personal automation tool that scrapes multiple job boards and Telegram channel
 
 ## What it does
 
-1. **Collects** vacancies from 9 sources: Talanto, Telegram (12 verified public channels), Habr Career, GeekJob, ITA Jobs, Remote OK, Wellfound, We Work Remotely, Working Nomads.
+1. **Collects** vacancies from 9 sources: Talanto, Telegram (12 verified public channels), Habr Career, GeekJob, ITA Jobs, Remote OK, Wellfound, Working Nomads, Himalayas, Ministry of Testing.
 2. **Filters** results down to QA/testing-relevant roles using a bilingual (RU/EN) keyword matcher, with an exclusion list to keep out adjacent roles (developers, analysts, DevOps, etc.).
 3. **Deduplicates** by URL.
 4. **Checks Supabase** for vacancies already seen in previous runs.
@@ -58,10 +58,22 @@ Required environment variables (see `.env.example`):
 
 - [ ] Glassdoor / Monster — considered, not added yet: Glassdoor blocks unauthenticated/automated access hard (heavy bot protection, frequent CAPTCHAs) and is likely to end up like Indeed; Monster's listings render via client-side JS that needs a live Playwright check before committing selectors. Low priority given the effort/payoff so far.
 - [x] ~~FlexJobs~~ — added, then dropped: headless Playwright got served a completely blank page (empty `<body>`), same bot-block class as Indeed/Glassdoor. Source kept in `_legacy/flexJobs.disabled.js` in case FlexJobs' block behaves differently later.
+- [x] ~~We Work Remotely~~ — added, then dropped 2026-09-07: started serving a Cloudflare "Performing security verification" challenge page to headless Playwright (it didn't do this when the source was first added days earlier — bot protection was switched on in between). Same class of block as Indeed/Glassdoor/FlexJobs. Source kept in `_legacy/weWorkRemotely.disabled.js`.
 - [ ] ~~HeadHunter (hh.ru) parser~~ — decided against, not worth the source quality for this search (stub kept in `_legacy/`)
 - [ ] Indeed parser — disabled for now, Indeed's bot-verification flow blocks headless scraping (source code kept locally in `_legacy/`, not in this repo)
 - [ ] LinkedIn — intentionally not scraped: LinkedIn actively detects and bans automation, not worth the account risk
 - [ ] Scoring/ranking of matches (stack fit, salary, remote/relocation) instead of a flat keyword filter
+- [ ] GeekJob — couldn't find a working QA-specific search/category URL (`?qs=QA` and `/vacancies/qa` both dead ends); currently pages through the general `/vacancies` firehose instead. Revisit if GeekJob's actual search UI reveals the real query param.
+
+### Fixed 2026-09-07 (round 2 -- Monday, only 7 notifications, all Talanto)
+
+The 2026-09-04 fixes were real but incomplete -- two more issues only showed up under a live scheduled run:
+
+- **We Work Remotely** went from "0 results, searches broken" (09-04) to fully Cloudflare-blocked (09-07) -- the site turned on bot protection in the intervening days. Dropped, see Roadmap above.
+- **Working Nomads** was still returning 0 with *no* debug artifact at all -- meaning the row selector (`a.job-desktop`) matched something, but every single row then failed to extract a title/URL, a case the 09-04 debug dumps didn't cover (they only fired on "selector found 0 rows" or an outright exception). Added a third debug dump for exactly this "rows found, nothing extracted" case, so the next run that hits it leaves a screenshot + HTML behind instead of silently returning empty.
+- **Habr Career** and **GeekJob** were both only ever reading page 1 -- confirmed by reading their code, not guessed. Habr Career's two QA category pages (`testirovshik`, `testirovschik_mobilnyh_prilozheniy`) are well-scoped but were never paginated past the first page; now pages through `?page=N` until a page adds no new links. GeekJob had no working QA-specific URL to begin with (was hitting the bare homepage + unfiltered `/vacancies` firehose) -- couldn't find a real search endpoint (see Roadmap), so at minimum made the existing firehose actually page through instead of reading page 1 forever.
+- Added **per-source counts for the final "new" stage** (`newBySource` in the run log), not just raw collection counts. The old log could tell you Telegram collected 521 raw postings, but not how many of those survived the QA filter *and* were new *and* actually source Telegram vs. Talanto vs. anything else -- which is exactly the question "why did only Talanto notifications arrive today" needs answered.
+- Added two new sources: **Himalayas** (`himalayas.app/jobs/quality-assurance` -- confirmed real, server-rendered QA listings; single page only, since Himalayas' `robots.txt` explicitly disallows crawling `?page=` on `/jobs`) and **Ministry of Testing** (`ministryoftesting.com/jobs` -- a QA/testing-specific community job board, so everything on it is already testing-relevant by construction, unlike the general boards).
 
 ### Fixed 2026-09-04 (low yield investigation)
 

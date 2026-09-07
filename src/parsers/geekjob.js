@@ -96,15 +96,40 @@ async function getGeekJobJobs() {
 
     const page = await browser.newPage();
 
-    const searchUrls = [
-        "https://geekjob.ru/",
-        "https://geekjob.ru/vacancies"
-    ];
+    /*
+     * GeekJob не даёт очевидного URL для поиска именно QA-вакансий
+     * (несколько вариантов вроде ?qs=QA и /vacancies/qa не сработали
+     * при проверке) -- поэтому продолжаем брать общий поток вакансий
+     * и полагаемся на QA-фильтр. Но раньше читали только первую
+     * страницу /vacancies -- теперь листаем дальше, пока не
+     * закончатся новые ссылки.
+     */
+    const MAX_PAGES = 6;
 
     const jobs = [];
+    const seenUrls = new Set();
 
     try {
-        for (const url of searchUrls) {
+        console.log("🔎 Parsing: https://geekjob.ru/");
+
+        try {
+            await page.goto("https://geekjob.ru/", {
+                waitUntil: "domcontentloaded",
+                timeout: 30000
+            });
+
+            await page.waitForTimeout(2000);
+        } catch (error) {
+            console.log(
+                `⚠️ Failed to open homepage: ${error.message}`
+            );
+        }
+
+        for (let pageNum = 1; pageNum <= MAX_PAGES; pageNum++) {
+            const url =
+                "https://geekjob.ru/vacancies" +
+                (pageNum > 1 ? `?page=${pageNum}` : "");
+
             console.log(`🔎 Parsing: ${url}`);
 
             try {
@@ -119,7 +144,7 @@ async function getGeekJobJobs() {
                     `⚠️ Failed to open ${url}: ${error.message}`
                 );
 
-                continue;
+                break;
             }
 
             const links = page.locator(
@@ -129,8 +154,10 @@ async function getGeekJobJobs() {
             const count = await links.count();
 
             console.log(
-                `📋 Vacancy links found: ${count}`
+                `📋 Page ${pageNum}: ${count} vacancy links found`
             );
+
+            let newOnThisPage = 0;
 
             for (let i = 0; i < count; i++) {
                 const link = links.nth(i);
@@ -146,13 +173,20 @@ async function getGeekJobJobs() {
                     .replace(/\s+/g, " ")
                     .trim();
 
-                if (!isQaJob(position)) {
-                    continue;
-                }
-
                 const fullUrl = href.startsWith("http")
                     ? href
                     : `https://geekjob.ru${href}`;
+
+                if (seenUrls.has(fullUrl)) {
+                    continue;
+                }
+
+                seenUrls.add(fullUrl);
+                newOnThisPage++;
+
+                if (!isQaJob(position)) {
+                    continue;
+                }
 
                 jobs.push({
                     company: "Unknown",
@@ -161,6 +195,13 @@ async function getGeekJobJobs() {
                     url: fullUrl,
                     source: "GeekJob"
                 });
+            }
+
+            if (newOnThisPage === 0) {
+                console.log(
+                    `📋 No new links on page ${pageNum}, stopping`
+                );
+                break;
             }
         }
 

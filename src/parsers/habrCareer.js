@@ -132,74 +132,139 @@ async function getHabrCareerJobs() {
 
     const page = await browser.newPage();
 
-    const urls = [
-        "https://career.habr.com/vacancies/testirovshik/full_time",
-        "https://career.habr.com/vacancies/testirovschik_mobilnyh_prilozheniy/full_time"
+    const categories = [
+        "testirovshik",
+        "testirovschik_mobilnyh_prilozheniy"
     ];
+
+    // Раньше читали только первую страницу каждой категории -- на
+    // категории с активным набором это отрезает большую часть реально
+    // существующих вакансий. Теперь идём по страницам, пока не
+    // перестанут появляться новые ссылки (или до предохранительного
+    // лимита), а не останавливаемся после первой.
+    const MAX_PAGES_PER_CATEGORY = 6;
 
     const jobs = [];
 
     try {
-        for (const url of urls) {
-            console.log(`🔎 Parsing: ${url}`);
+        for (const category of categories) {
+            const seenUrlsInCategory = new Set();
 
-            await page.goto(url, {
-                waitUntil: "domcontentloaded",
-                timeout: 30000
-            });
+            for (let pageNum = 1; pageNum <= MAX_PAGES_PER_CATEGORY; pageNum++) {
+                const url =
+                    `https://career.habr.com/vacancies/${category}/full_time` +
+                    (pageNum > 1 ? `?page=${pageNum}` : "");
 
-            await page.waitForTimeout(1500);
+                console.log(`🔎 Parsing: ${url}`);
 
-            const vacancyLinks = page.locator(
-                'a[href*="/vacancies/"]'
-            );
-
-            const count = await vacancyLinks.count();
-
-            console.log(
-                `📋 Vacancy links found: ${count}`
-            );
-
-            for (let i = 0; i < count; i++) {
-                const link = vacancyLinks.nth(i);
-
-                const href = await link.getAttribute("href");
-                const text = await link.innerText();
-
-                if (!href || !text) {
-                    continue;
-                }
-
-                const title = text
-                    .replace(/\s+/g, " ")
-                    .trim();
-
-                // Проверяем только реальные ссылки на вакансии
-                if (
-                    !href.match(/^\/vacancies\/\d+/) &&
-                    !href.match(
-                        /^https:\/\/career\.habr\.com\/vacancies\/\d+/
-                    )
-                ) {
-                    continue;
-                }
-
-                // Главный QA-фильтр
-                if (!isQaPosition(title)) {
-                    continue;
-                }
-
-                const fullUrl = href.startsWith("http")
-                    ? href
-                    : `https://career.habr.com${href}`;
-
-                jobs.push({
-                    company: "Unknown",
-                    position: title,
-                    description: "",
-                    url: fullUrl,
-                    source: "Habr Career"
+                await page.goto(url, {
+                    waitUntil: "domcontentloaded",
+                    timeout: 30000
                 });
+
+                await page.waitForTimeout(1500);
+
+                const vacancyLinks = page.locator(
+                    'a[href*="/vacancies/"]'
+                );
+
+                const count = await vacancyLinks.count();
+
+                console.log(
+                    `📋 Page ${pageNum}: ${count} vacancy links found`
+                );
+
+                let newOnThisPage = 0;
+
+                for (let i = 0; i < count; i++) {
+                    const link = vacancyLinks.nth(i);
+
+                    const href = await link.getAttribute("href");
+                    const text = await link.innerText();
+
+                    if (!href || !text) {
+                        continue;
+                    }
+
+                    const title = text
+                        .replace(/\s+/g, " ")
+                        .trim();
+
+                    // Проверяем только реальные ссылки на вакансии
+                    if (
+                        !href.match(/^\/vacancies\/\d+/) &&
+                        !href.match(
+                            /^https:\/\/career\.habr\.com\/vacancies\/\d+/
+                        )
+                    ) {
+                        continue;
+                    }
+
+                    const fullUrl = href.startsWith("http")
+                        ? href
+                        : `https://career.habr.com${href}`;
+
+                    if (seenUrlsInCategory.has(fullUrl)) {
+                        continue;
+                    }
+
+                    seenUrlsInCategory.add(fullUrl);
+                    newOnThisPage++;
+
+                    // Главный QA-фильтр
+                    if (!isQaPosition(title)) {
+                        continue;
+                    }
+
+                    let company = "Unknown";
+
+                    try {
+                        // Название компании обычно лежит в соседнем
+                        // элементе карточки, а не в самой ссылке на
+                        // вакансию -- пробуем ближайший контейнер.
+                        const card = link.locator(
+                            "xpath=ancestor::*[contains(@class, 'vacancy-card')][1]"
+                        );
+
+                        if (await card.count()) {
+                            const companyLink = card
+                                .locator('a[href*="/companies/"]')
+                                .first();
+
+                            if (await companyLink.count()) {
+                                const companyText = await companyLink
+                                    .innerText()
+                                    .catch(() => "");
+
+                                if (companyText && companyText.trim()) {
+                                    company = companyText
+                                        .replace(/\s+/g, " ")
+                                        .trim();
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        // Не критично -- просто оставляем "Unknown"
+                    }
+
+                    jobs.push({
+                        company,
+                        position: title,
+                        description: "",
+                        url: fullUrl,
+                        source: "Habr Career"
+                    });
+                }
+
+                // Если на странице не появилось ни одной новой ссылки
+                // на вакансию -- дальше листать некуда, страницы
+                // закончились.
+                if (newOnThisPage === 0) {
+                    console.log(
+                        `📋 No new links on page ${pageNum}, stopping category "${category}"`
+                    );
+                    break;
+                }
             }
         }
 

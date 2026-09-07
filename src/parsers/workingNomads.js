@@ -226,6 +226,38 @@ async function getWorkingNomadsJobs() {
         );
         console.table(uniqueJobs);
 
+        /*
+         * Раньше debug-дамп сохранялся только если сам селектор строк
+         * не нашёл ничего (count === 0). Но однажды count был > 0 (сайт
+         * такой же), а итоговый uniqueJobs всё равно оказался пустым --
+         * то есть каждая строка по отдельности не прошла извлечение
+         * href/title (например, разметка внутри карточки поменялась,
+         * хотя обёртка a.job-desktop осталась той же). Тот случай был
+         * невидим: ни один из существующих debug-путей не сработал.
+         * Ловим и его тоже.
+         */
+        if (uniqueJobs.length === 0 && count > 0) {
+            console.log(
+                "⚠️ Working Nomads: rows were found by selector but none produced a valid job -- dumping for inspection"
+            );
+
+            try {
+                await page.screenshot({
+                    path: "workingnomads-empty-extract.png",
+                    fullPage: true
+                });
+                const html = await page.content();
+                fs.writeFileSync(
+                    "workingnomads-empty-extract.html",
+                    html,
+                    "utf-8"
+                );
+                console.log("📸 Debug screenshot + HTML saved");
+            } catch (dumpError) {
+                console.log("⚠️ Could not save debug artifacts");
+            }
+        }
+
         return uniqueJobs;
     } catch (error) {
         console.error("❌ Working Nomads parser error:");
