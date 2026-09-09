@@ -118,7 +118,15 @@ async function getWorkingNomadsJobs() {
 
                 let position = "";
 
+                /*
+                 * Подтверждено по дампу workingnomads-empty-extract.html:
+                 * заголовок вакансии лежит в <h4 class="ng-binding">, которого
+                 * не было в списке -- поэтому позиция никогда не находилась,
+                 * и извлечение отваливалось на первом же шаге для каждой
+                 * строки (href до этого места даже не доходил).
+                 */
                 const titleSelectors = [
+                    "h4",
                     "h2",
                     "h3",
                     ".title",

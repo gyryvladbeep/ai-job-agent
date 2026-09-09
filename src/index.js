@@ -8,7 +8,6 @@ const { getItaJobs } = require("./parsers/itaJobs");
 const { getRemoteOkJobs } = require("./parsers/remoteOk");
 const { getWellfoundJobs } = require("./parsers/wellfound");
 const { getWorkingNomadsJobs } = require("./parsers/workingNomads");
-const { getHimalayasJobs } = require("./parsers/himalayas");
 const {
     getMinistryOfTestingJobs
 } = require("./parsers/ministryOfTesting");
@@ -81,7 +80,6 @@ async function collectJobs() {
         { name: "Remote OK", parser: getRemoteOkJobs },
         { name: "Wellfound", parser: getWellfoundJobs },
         { name: "Working Nomads", parser: getWorkingNomadsJobs },
-        { name: "Himalayas", parser: getHimalayasJobs },
         { name: "Ministry of Testing", parser: getMinistryOfTestingJobs }
     ];
 

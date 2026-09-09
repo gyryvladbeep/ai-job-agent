@@ -4,7 +4,7 @@ A personal automation tool that scrapes multiple job boards and Telegram channel
 
 ## What it does
 
-1. **Collects** vacancies from 9 sources: Talanto, Telegram (12 verified public channels), Habr Career, GeekJob, ITA Jobs, Remote OK, Wellfound, Working Nomads, Himalayas, Ministry of Testing.
+1. **Collects** vacancies from 9 sources: Talanto, Telegram (12 verified public channels), Habr Career, GeekJob, ITA Jobs, Remote OK, Wellfound, Working Nomads, Ministry of Testing.
 2. **Filters** results down to QA/testing-relevant roles using a bilingual (RU/EN) keyword matcher, with an exclusion list to keep out adjacent roles (developers, analysts, DevOps, etc.).
 3. **Deduplicates** by URL.
 4. **Checks Supabase** for vacancies already seen in previous runs.
@@ -59,11 +59,20 @@ Required environment variables (see `.env.example`):
 - [ ] Glassdoor / Monster — considered, not added yet: Glassdoor blocks unauthenticated/automated access hard (heavy bot protection, frequent CAPTCHAs) and is likely to end up like Indeed; Monster's listings render via client-side JS that needs a live Playwright check before committing selectors. Low priority given the effort/payoff so far.
 - [x] ~~FlexJobs~~ — added, then dropped: headless Playwright got served a completely blank page (empty `<body>`), same bot-block class as Indeed/Glassdoor. Source kept in `_legacy/flexJobs.disabled.js` in case FlexJobs' block behaves differently later.
 - [x] ~~We Work Remotely~~ — added, then dropped 2026-09-07: started serving a Cloudflare "Performing security verification" challenge page to headless Playwright (it didn't do this when the source was first added days earlier — bot protection was switched on in between). Same class of block as Indeed/Glassdoor/FlexJobs. Source kept in `_legacy/weWorkRemotely.disabled.js`.
+- [x] ~~Himalayas~~ — added 2026-09-07, dropped 2026-09-09: every single automated run hit a Cloudflare "Performing security verification" challenge page (confirmed via debug HTML/screenshot on multiple separate runs, not a one-off) — same class of block as WWR/FlexJobs/Indeed/Glassdoor. A manual browser session clears the challenge after a few seconds (real browser fingerprint), but plain headless Playwright does not, and I'm not building a stealth-browser bypass for it. Source kept in `_legacy/himalayas.disabled.js`.
 - [ ] ~~HeadHunter (hh.ru) parser~~ — decided against, not worth the source quality for this search (stub kept in `_legacy/`)
 - [ ] Indeed parser — disabled for now, Indeed's bot-verification flow blocks headless scraping (source code kept locally in `_legacy/`, not in this repo)
 - [ ] LinkedIn — intentionally not scraped: LinkedIn actively detects and bans automation, not worth the account risk
 - [ ] Scoring/ranking of matches (stack fit, salary, remote/relocation) instead of a flat keyword filter
 - [ ] GeekJob — couldn't find a working QA-specific search/category URL (`?qs=QA` and `/vacancies/qa` both dead ends); currently pages through the general `/vacancies` firehose instead. Revisit if GeekJob's actual search UI reveals the real query param.
+
+### Fixed 2026-09-09 (Working Nomads still 0, Himalayas still 0)
+
+Both had been "fixed" in the 09-07 round but neither was verified against a live run afterward -- this round is that verification, done properly against real debug artifacts instead of guessing:
+
+- **Working Nomads**: the 09-07 fix corrected the row selector (`a.job-desktop`) and the href extraction, but the *title* extraction was still broken -- confirmed from `workingnomads-empty-extract.html`, the real job title lives in `<h4 class="ng-binding">`, which was never in the title-selector fallback list (`h2`, `h3`, `.title`, `[class*='title']`, nested `a`). Every row failed at the title step before href was ever reached, so all rows were silently skipped even though the row selector itself was matching correctly. Added `h4` to the list.
+- **Himalayas**: confirmed via debug screenshot that the site serves a Cloudflare "Performing security verification" interstitial to headless Playwright on every run, no exceptions -- this is why it always returned exactly 0 with no error. Dropped rather than chasing a stealth-browser bypass, consistent with how WWR/FlexJobs were handled. See Roadmap.
+- Confirmed today's "0 new vacancies" run (12:10 run, 5 hours after a 07:19 run that found 10 new) was correct dedupe behavior, not a bug: 293 unique postings survived the QA filter, all 293 already existed in Supabase from the earlier run that same morning. `stoppedAt: "dedupe"` in `logs/last-run.json` is the confirming signal for this case going forward.
 
 ### Fixed 2026-09-07 (round 2 -- Monday, only 7 notifications, all Talanto)
 
