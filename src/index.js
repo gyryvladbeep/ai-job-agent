@@ -11,14 +11,19 @@ const { getWorkingNomadsJobs } = require("./parsers/workingNomads");
 const {
     getMinistryOfTestingJobs
 } = require("./parsers/ministryOfTesting");
+const {
+    getCompanyBoardJobs
+} = require("./parsers/companyBoards");
 
 const {
     jobExists,
     saveJobs,
-    markAsNotified
+    markAsNotified,
+    markAsExpired
 } = require("./services/supabase");
 
 const { sendJob } = require("./services/telegram");
+const { isVacancyLive } = require("./utils/isVacancyLive");
 
 const { filterQaJobs } = require("./utils/qaFilter");
 
@@ -80,7 +85,8 @@ async function collectJobs() {
         { name: "Remote OK", parser: getRemoteOkJobs },
         { name: "Wellfound", parser: getWellfoundJobs },
         { name: "Working Nomads", parser: getWorkingNomadsJobs },
-        { name: "Ministry of Testing", parser: getMinistryOfTestingJobs }
+        { name: "Ministry of Testing", parser: getMinistryOfTestingJobs },
+        { name: "Direct Company Boards", parser: getCompanyBoardJobs }
     ];
 
     console.log("");
@@ -131,6 +137,7 @@ async function processJobs() {
         saved: 0,
         notified: 0,
         notificationErrors: 0,
+        expired: 0,
         stoppedAt: "started",
         error: null
     };
@@ -371,11 +378,32 @@ async function processJobs() {
 
         let notified = 0;
         let failed = 0;
+        let expired = 0;
 
 
         for (const job of savedJobs) {
 
             try {
+
+                // Best-effort проверка "вакансия ещё жива" прямо перед
+                // отправкой -- fail-open (любая ошибка проверки = считаем
+                // живой), так что она может только пропустить лишнее
+                // уведомление про закрытую вакансию, но никогда не
+                // заблокирует реальную новую.
+                const stillLive = await isVacancyLive(job.url);
+
+                if (!stillLive) {
+
+                    expired++;
+
+                    await markAsExpired(job.id);
+
+                    console.log(
+                        `⏭️ Skipped (looks closed): ${job.company} — ${job.position}`
+                    );
+
+                    continue;
+                }
 
                 await sendJob(job);
 
@@ -409,6 +437,7 @@ async function processJobs() {
 
         runSummary.notified = notified;
         runSummary.notificationErrors = failed;
+        runSummary.expired = expired;
         runSummary.stoppedAt = "complete";
 
 
@@ -443,6 +472,10 @@ async function processJobs() {
 
         console.log(
             `📨 Notified: ${notified}`
+        );
+
+        console.log(
+            `⏭️ Skipped as expired: ${expired}`
         );
 
         console.log(

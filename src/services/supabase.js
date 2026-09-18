@@ -96,10 +96,58 @@ async function markAsFailed(id) {
     return true;
 }
 
+// Помечаем вакансию как истёкшую/закрытую -- нашли её новой, но
+// проверка перед отправкой показала, что она уже не принимает
+// отклики. Отдельный статус, а не "failed": это не ошибка
+// парсинга/сети, сама вакансия закрыта.
+async function markAsExpired(id) {
+    const { error } = await supabase
+        .from("vacancies")
+        .update({
+            status: "expired"
+        })
+        .eq("id", id);
+
+    if (error) {
+        console.error("❌ Error marking vacancy as expired:");
+        console.error(error);
+        return false;
+    }
+
+    console.log(`⚠️ Vacancy ${id} marked as expired`);
+
+    return true;
+}
+
+// Записываем статус, который пользователь выбрал кнопкой в Telegram
+// под уведомлением (см. src/services/telegramListener.js) --
+// "applied" / "skipped" / "interview". Один общий сеттер вместо трёх
+// одинаковых функций, потому что логика буквально идентична.
+async function setVacancyStatus(id, status) {
+    const { error } = await supabase
+        .from("vacancies")
+        .update({
+            status
+        })
+        .eq("id", id);
+
+    if (error) {
+        console.error(`❌ Error setting vacancy ${id} status to "${status}":`);
+        console.error(error);
+        return false;
+    }
+
+    console.log(`✅ Vacancy ${id} status set to "${status}"`);
+
+    return true;
+}
+
 module.exports = {
     supabase,
     jobExists,
     saveJobs,
     markAsNotified,
-    markAsFailed
+    markAsFailed,
+    markAsExpired,
+    setVacancyStatus
 };

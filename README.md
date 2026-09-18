@@ -4,7 +4,7 @@ A personal automation tool that scrapes multiple job boards and Telegram channel
 
 ## What it does
 
-1. **Collects** vacancies from 9 sources: Talanto, Telegram (12 verified public channels), Habr Career, GeekJob, ITA Jobs, Remote OK, Wellfound, Working Nomads, Ministry of Testing.
+1. **Collects** vacancies from 10 sources: Talanto, Telegram (12 verified public channels), Habr Career, GeekJob, ITA Jobs, Remote OK, Wellfound, Working Nomads, Ministry of Testing, and direct company career boards (Elastic, MongoDB, Twilio, Grafana Labs, GitLab, SmartBear, Canonical, Confluent, Zapier via their public Greenhouse/Ashby APIs).
 2. **Filters** results down to QA/testing-relevant roles using a bilingual (RU/EN) keyword matcher, with an exclusion list to keep out adjacent roles (developers, analysts, DevOps, etc.).
 3. **Deduplicates** by URL.
 4. **Checks Supabase** for vacancies already seen in previous runs.
@@ -65,6 +65,18 @@ Required environment variables (see `.env.example`):
 - [ ] LinkedIn — intentionally not scraped: LinkedIn actively detects and bans automation, not worth the account risk
 - [ ] Scoring/ranking of matches (stack fit, salary, remote/relocation) instead of a flat keyword filter
 - [ ] GeekJob — couldn't find a working QA-specific search/category URL (`?qs=QA` and `/vacancies/qa` both dead ends); currently pages through the general `/vacancies` firehose instead. Revisit if GeekJob's actual search UI reveals the real query param.
+
+### Added 2026-09-18 (5 approved improvements from a 10-idea brainstorm)
+
+User picked 5 of 10 proposed improvements, with explicit scoping comments on two of them -- implemented exactly as scoped, nothing broader:
+
+- **Direct company career-page monitoring** (new source, 10th): added `src/parsers/companyBoards.js`, querying 9 companies' own public ATS APIs directly (Greenhouse: Elastic, MongoDB, Twilio, Grafana Labs, GitLab, SmartBear, Canonical; Ashby: Confluent, Zapier) -- plain `fetch` + JSON, no Playwright/browser needed at all for these, since both ATS platforms expose stable public JSON endpoints. Every slug verified individually against the real API before being added (a few guesses 404'd and were dropped: HashiCorp, Postman, Doist on both platforms, Atlassian). This is the "hidden job market" tactic discussed in coaching -- bypasses aggregator noise and ATS keyword-matching entirely.
+- **Telegram inline-button status tracking**: each notification now carries "Applied / Skipped / Interview" buttons. `src/services/telegramListener.js` runs inside the existing `scheduler.js` process (no second process to keep alive) with its own polling bot instance (separate from the send-only one in `telegram.js` -- two Telegram clients on one token only conflict if both poll, and only the listener does), writes the chosen status to Supabase via a new `setVacancyStatus()`, and edits the message to remove the buttons and show what was recorded. This is the first real application-funnel data (applied -> interview) the whole campaign has had.
+- **Dead/expired vacancy check before notifying**: `src/utils/isVacancyLive.js` does a best-effort fetch + closed-posting-phrase check (RU+EN) right before sending each notification. Fail-open by design: any check failure (timeout, block, network) is treated as "still live" -- this can only suppress a real dead link, never block a genuine new posting. Vacancies caught this way are saved with a new `expired` status via `markAsExpired()` rather than being silently dropped.
+- **Relocation/visa signal tag** -- explicitly scoped by the user as "a postscript, don't disrupt the main flow": `src/utils/relocationTag.js` only appends a line to the notification when a real signal is found in the title/description (RU+EN keyword list), never a "no relocation" line on the other 95% of vacancies, and doesn't touch the QA filter, scoring, or dedupe.
+- **Recruiter LinkedIn-search link** -- also explicitly scoped as a postscript: `src/utils/recruiterSearchLink.js` appends a ready-made LinkedIn people-search URL (company + "QA recruiter") to every notification. Pure URL templating, no LinkedIn automation/scraping of any kind -- the user opens it himself from his phone, since his laptop's IP is blocked on LinkedIn from an earlier login from Russia.
+
+Declined and intentionally not built: match-scoring against the resume (user's call -- volume matters more than ranking for him right now), LinkedIn email-alert ingestion (his LinkedIn access itself is constrained, not worth the added complexity), description-level QA filtering, a weekly digest, and auto-drafted cover-letter openers.
 
 ### Fixed 2026-09-18 (deep health check -- 9 days of run history reviewed)
 
