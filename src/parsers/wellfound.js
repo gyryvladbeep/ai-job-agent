@@ -1,7 +1,17 @@
 const { chromium } = require("playwright");
 
+/*
+ * Подтверждено вручную (живая проверка в браузере 2026-09-09 и
+ * WebFetch 2026-09-18): ?query=QA%20Engineer на /jobs не фильтрует
+ * вообще ничего -- сайт отдаёт "0 results" и молча показывает
+ * общую подборку трендовых вакансий (Sales, Product, Design...),
+ * из-за чего парсер честно собирал 45-51 вакансию в день, но НИ
+ * ОДНА не была реальной QA-позицией (все отсеивались общим QA-
+ * фильтром) -- 9 дней подряд, 0 новых. /role/r/qa-engineer -- это
+ * настоящая категорийная страница с реальными QA-вакансиями.
+ */
 const WELLFOUND_URL =
-    "https://wellfound.com/jobs?query=QA%20Engineer";
+    "https://wellfound.com/role/r/qa-engineer";
 
 function cleanText(text) {
     return String(text || "")

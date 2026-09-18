@@ -1,3 +1,4 @@
+const fs = require("fs");
 const { chromium } = require("playwright");
 
 const QA_KEYWORDS = [
@@ -156,6 +157,33 @@ async function getGeekJobJobs() {
             console.log(
                 `📋 Page ${pageNum}: ${count} vacancy links found`
             );
+
+            if (count === 0) {
+                console.log(
+                    `⚠️ GeekJob: 0 links on page ${pageNum} -- dumping for inspection`
+                );
+
+                try {
+                    await page.screenshot({
+                        path: `geekjob-page${pageNum}-debug.png`,
+                        fullPage: true
+                    });
+
+                    const html = await page.content();
+                    fs.writeFileSync(
+                        `geekjob-page${pageNum}-debug.html`,
+                        html,
+                        "utf-8"
+                    );
+
+                    console.log(
+                        "📸 Debug screenshot + HTML saved"
+                    );
+                } catch (dumpError) {
+                    console.log("⚠️ Could not save debug artifacts");
+                    console.log(dumpError?.message || dumpError);
+                }
+            }
 
             let newOnThisPage = 0;
 

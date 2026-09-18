@@ -122,6 +122,7 @@ async function processJobs() {
     // when the scheduler fired.
     const runSummary = {
         bySource: {},
+        qaFilteredBySource: {},
         newBySource: {},
         collected: 0,
         qaFiltered: 0,
@@ -179,6 +180,21 @@ async function processJobs() {
         );
 
         runSummary.qaFiltered = qaJobs.length;
+
+        // Разбивка "прошло QA-фильтр" по источникам -- без неё
+        // источник может честно собирать десятки вакансий (bySource
+        // выглядит здоровым) и при этом ни одна не будет реальной
+        // QA-позицией (например, у сломанного поиска на сайте, когда
+        // он молча откатывается на нерелевантную подборку) -- и это
+        // останется незаметным, пока кто-то не полезет разбираться
+        // вручную. Именно так неделю не замечали, что Wellfound отдавал
+        // 45-51 вакансию в день, из которых 0 проходили QA-фильтр.
+        const qaFilteredBySource = {};
+        for (const job of qaJobs) {
+            const key = job.source || "Unknown";
+            qaFilteredBySource[key] = (qaFilteredBySource[key] || 0) + 1;
+        }
+        runSummary.qaFilteredBySource = qaFilteredBySource;
 
 
         if (qaJobs.length === 0) {
