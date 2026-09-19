@@ -4,7 +4,7 @@ A personal automation tool that scrapes multiple job boards and Telegram channel
 
 ## What it does
 
-1. **Collects** vacancies from 10 sources: Talanto, Telegram (12 verified public channels), Habr Career, GeekJob, ITA Jobs, Remote OK, Wellfound, Working Nomads, Ministry of Testing, and direct company career boards (Elastic, MongoDB, Twilio, Grafana Labs, GitLab, SmartBear, Canonical, Confluent, Zapier via their public Greenhouse/Ashby APIs).
+1. **Collects** vacancies from 10 sources: Talanto, Telegram (12 verified public channels), Habr Career, GeekJob, ITA Jobs, Remote OK, Wellfound, Working Nomads, Ministry of Testing, and direct company career boards (37 companies via their public Greenhouse/Ashby APIs -- full list in `src/parsers/companyBoards.js`).
 2. **Filters** results down to QA/testing-relevant roles using a bilingual (RU/EN) keyword matcher, with an exclusion list to keep out adjacent roles (developers, analysts, DevOps, etc.).
 3. **Deduplicates** by URL.
 4. **Checks Supabase** for vacancies already seen in previous runs.
@@ -65,6 +65,14 @@ Required environment variables (see `.env.example`):
 - [ ] LinkedIn — intentionally not scraped: LinkedIn actively detects and bans automation, not worth the account risk
 - [ ] Scoring/ranking of matches (stack fit, salary, remote/relocation) instead of a flat keyword filter
 - [ ] GeekJob — couldn't find a working QA-specific search/category URL (`?qs=QA` and `/vacancies/qa` both dead ends); currently pages through the general `/vacancies` firehose instead. Revisit if GeekJob's actual search UI reveals the real query param.
+
+### Added 2026-09-19 (expanded direct company boards from 9 to 37)
+
+User asked for 40 candidate companies to add as direct sources. Proposed 40 real, known tech companies, then verified each one's actual ATS board individually (Greenhouse API first, then Ashby, then Lever as fallback) instead of guessing slugs blindly into the source list:
+
+- **28 verified and added**: Figma, Airtable, Asana, Webflow, Vercel, Netlify, Amplitude, Mixpanel, Datadog, New Relic, PagerDuty, Okta, Cloudflare, Fastly, CircleCI, LaunchDarkly, Stripe, Brex, Remote (remote.com), Gusto, Calendly, Typeform (all Greenhouse), plus Notion, Linear, Render, Ramp, Plaid, Deel (all Ashby).
+- **12 candidates dropped, not guessed further**: Monday.com, ClickUp, Miro, Retool, Snyk, 1Password, DigitalOcean, Codecov, Sentry, Chargebee, Rippling, Loom -- none had a working board on Greenhouse, Ashby, or Lever. They likely run a custom career site or a closed ATS (e.g. Workday), which would need a dedicated DOM parser rather than fitting the generic JSON-API approach `companyBoards.js` uses. Not built without a concrete next step requested.
+- Company board source total: **37** (9 from the previous round + 28 new), all through the same two generic fetch-based parsers -- no new parser code needed, just data.
 
 ### Added 2026-09-18 (5 approved improvements from a 10-idea brainstorm)
 

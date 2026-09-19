@@ -24,12 +24,51 @@ const GREENHOUSE_BOARDS = [
     { slug: "grafanalabs", company: "Grafana Labs" },
     { slug: "gitlab", company: "GitLab" },
     { slug: "smartbear", company: "SmartBear" },
-    { slug: "canonical", company: "Canonical" }
+    { slug: "canonical", company: "Canonical" },
+
+    // Добавлено 2026-09-19 -- список из 40 кандидатов, каждый slug
+    // проверен вручную (WebFetch) перед добавлением. 12 кандидатов
+    // не нашли рабочей доски ни на Greenhouse, ни на Ashby, ни на
+    // Lever (Monday.com, ClickUp, Miro, Retool, Snyk, 1Password,
+    // DigitalOcean, Codecov, Sentry, Chargebee, Rippling, Loom) --
+    // не угадываю их API дальше, у них либо кастомный сайт, либо
+    // Workday/другая закрытая система, для которой нужен отдельный
+    // DOM-парсер, а не эта generic-схема.
+    { slug: "figma", company: "Figma" },
+    { slug: "airtable", company: "Airtable" },
+    { slug: "asana", company: "Asana" },
+    { slug: "webflow", company: "Webflow" },
+    { slug: "vercel", company: "Vercel" },
+    { slug: "netlify", company: "Netlify" },
+    { slug: "amplitude", company: "Amplitude" },
+    { slug: "mixpanel", company: "Mixpanel" },
+    { slug: "datadog", company: "Datadog" },
+    { slug: "newrelic", company: "New Relic" },
+    { slug: "pagerduty", company: "PagerDuty" },
+    { slug: "okta", company: "Okta" },
+    { slug: "cloudflare", company: "Cloudflare" },
+    { slug: "fastly", company: "Fastly" },
+    { slug: "circleci", company: "CircleCI" },
+    { slug: "launchdarkly", company: "LaunchDarkly" },
+    { slug: "stripe", company: "Stripe" },
+    { slug: "brex", company: "Brex" },
+    { slug: "remotecom", company: "Remote" },
+    { slug: "gusto", company: "Gusto" },
+    { slug: "calendly", company: "Calendly" },
+    { slug: "typeform", company: "Typeform" }
 ];
 
 const ASHBY_BOARDS = [
     { slug: "confluent", company: "Confluent" },
-    { slug: "zapier", company: "Zapier" }
+    { slug: "zapier", company: "Zapier" },
+
+    // Добавлено 2026-09-19, тоже проверено вручную.
+    { slug: "notion", company: "Notion" },
+    { slug: "linear", company: "Linear" },
+    { slug: "render", company: "Render" },
+    { slug: "ramp", company: "Ramp" },
+    { slug: "plaid", company: "Plaid" },
+    { slug: "deel", company: "Deel" }
 ];
 
 function stripHtml(html) {
