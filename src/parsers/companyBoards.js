@@ -55,7 +55,36 @@ const GREENHOUSE_BOARDS = [
     { slug: "remotecom", company: "Remote" },
     { slug: "gusto", company: "Gusto" },
     { slug: "calendly", company: "Calendly" },
-    { slug: "typeform", company: "Typeform" }
+    { slug: "typeform", company: "Typeform" },
+
+    // Добавлено 2026-09-19 (второй раунд) -- ещё 50+ кандидатов
+    // проверено вручную (WebFetch) перед добавлением на этот раз.
+    { slug: "intercom", company: "Intercom" },
+    { slug: "algolia", company: "Algolia" },
+    { slug: "contentful", company: "Contentful" },
+    { slug: "jfrog", company: "JFrog" },
+    { slug: "sumologic", company: "Sumo Logic" },
+    { slug: "pendo", company: "Pendo" },
+    { slug: "braze", company: "Braze" },
+    { slug: "iterable", company: "Iterable" },
+    { slug: "customerio", company: "Customer.io" },
+    { slug: "klaviyo", company: "Klaviyo" },
+    { slug: "fivetran", company: "Fivetran" },
+    { slug: "databricks", company: "Databricks" },
+    { slug: "dremio", company: "Dremio" },
+    { slug: "neo4j", company: "Neo4j" },
+    { slug: "cockroachlabs", company: "Cockroach Labs" },
+    { slug: "scaleai", company: "Scale AI" },
+    { slug: "labelbox", company: "Labelbox" },
+    { slug: "assemblyai", company: "AssemblyAI" },
+    { slug: "mercury", company: "Mercury" },
+    { slug: "carta", company: "Carta" },
+    { slug: "descript", company: "Descript" },
+    { slug: "justworks", company: "Justworks" },
+    { slug: "affirm", company: "Affirm" },
+    { slug: "chime", company: "Chime" },
+    { slug: "checkr", company: "Checkr" },
+    { slug: "salesloft", company: "Salesloft" }
 ];
 
 const ASHBY_BOARDS = [
@@ -68,7 +97,40 @@ const ASHBY_BOARDS = [
     { slug: "render", company: "Render" },
     { slug: "ramp", company: "Ramp" },
     { slug: "plaid", company: "Plaid" },
-    { slug: "deel", company: "Deel" }
+    { slug: "deel", company: "Deel" },
+
+    // Добавлено 2026-09-19 (второй раунд), тоже проверено вручную.
+    { slug: "openai", company: "OpenAI" },
+    { slug: "vanta", company: "Vanta" },
+    { slug: "posthog", company: "PostHog" },
+    { slug: "clerk", company: "Clerk" },
+    { slug: "workos", company: "WorkOS" },
+    { slug: "resend", company: "Resend" },
+    { slug: "knock", company: "Knock" },
+    { slug: "elevenlabs", company: "ElevenLabs" },
+    { slug: "modal", company: "Modal" },
+    { slug: "anyscale", company: "Anyscale" },
+    { slug: "cohere", company: "Cohere" },
+    { slug: "weaviate", company: "Weaviate" },
+    { slug: "substack", company: "Substack" },
+    { slug: "watershed", company: "Watershed" },
+    { slug: "mercor", company: "Mercor" },
+    { slug: "decagon", company: "Decagon" },
+    { slug: "sierra", company: "Sierra" },
+    { slug: "harvey", company: "Harvey" },
+    { slug: "abridge", company: "Abridge" },
+    { slug: "supabase", company: "Supabase" },
+    { slug: "temporal", company: "Temporal" },
+    { slug: "synthesia", company: "Synthesia" },
+    { slug: "cursor", company: "Cursor" },
+    { slug: "n8n", company: "n8n" },
+    { slug: "pinecone", company: "Pinecone" },
+    { slug: "writer", company: "Writer" },
+    { slug: "speak", company: "Speak" },
+    { slug: "lovable", company: "Lovable" },
+    { slug: "vapi", company: "Vapi" },
+    { slug: "bland", company: "Bland" },
+    { slug: "baseten", company: "Baseten" }
 ];
 
 function stripHtml(html) {
