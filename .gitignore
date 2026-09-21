@@ -14,6 +14,10 @@ logs/
 # local-only / archived code
 _legacy/
 
+# generated reports (personal data, not code)
+still-open-vacancies.md
+vacancies-export.json
+
 # OS
 .DS_Store
 Thumbs.db
