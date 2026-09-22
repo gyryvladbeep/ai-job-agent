@@ -41,8 +41,6 @@ async function getRemoteOkJobs() {
         console.log(`🔗 Current URL: ${page.url()}`);
         console.log(`📄 Page title: ${await page.title()}`);
 
-        const jobs = [];
-
         /*
          * Remote OK обычно размещает вакансии
          * в строках <tr> с классом job.
@@ -51,6 +49,36 @@ async function getRemoteOkJobs() {
         const rows = page.locator(
             "tr.job"
         );
+
+        /*
+         * Добавлено 2026-09-22: сайт показывает "327 results" для
+         * Quality Assurance (подтверждено WebFetch), а мы каждый день
+         * стабильно читали ровно 49-50 строк -- то есть только то,
+         * что отрисовано сразу при загрузке. Остальное подгружается
+         * при скролле (типичный паттерн Remote OK). Скроллим вниз,
+         * пока число строк не перестанет расти -- тот же приём, что
+         * уже используется для Telegram-каналов.
+         */
+        let previousCount = await rows.count();
+
+        for (let scrollAttempt = 0; scrollAttempt < 20; scrollAttempt++) {
+            await page.evaluate(() => {
+                window.scrollTo(0, document.body.scrollHeight);
+            });
+
+            await page.waitForTimeout(1000);
+
+            const newCount = await rows.count();
+
+            if (newCount <= previousCount) {
+                console.log(
+                    `📋 Scroll stopped growing at ${newCount} rows (attempt ${scrollAttempt + 1})`
+                );
+                break;
+            }
+
+            previousCount = newCount;
+        }
 
         const count = await rows.count();
 
@@ -74,6 +102,8 @@ async function getRemoteOkJobs() {
 
             return [];
         }
+
+        const jobs = [];
 
         for (let i = 0; i < count; i++) {
 

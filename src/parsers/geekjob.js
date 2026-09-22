@@ -95,17 +95,40 @@ async function getGeekJobJobs() {
         headless: true
     });
 
-    const page = await browser.newPage();
+    /*
+     * Добавлено 2026-09-22: у этого парсера единственного из всех
+     * не было ни User-Agent, ни viewport на newPage() -- со стандартным
+     * headless-отпечатком Playwright сайт молча ронял сам page.goto()
+     * (не 0 карточек на странице -- сам переход не завершался), а
+     * try/catch вокруг goto просто логировал предупреждение и уходил
+     * в break ДО ветки с debug-дампом. Поэтому 0 держалось 2+ недели
+     * без единого debug-файла -- ветка дампа просто не успевала
+     * сработать. Подтверждено: geekjob.ru живой и открывается нормально
+     * (WebFetch увидел 222 вакансии, 12 страниц) -- то есть дело было
+     * именно в отпечатке headless-браузера, а не в самом сайте.
+     */
+    const page = await browser.newPage({
+        viewport: {
+            width: 1440,
+            height: 900
+        },
+
+        userAgent:
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+            "AppleWebKit/537.36 (KHTML, like Gecko) " +
+            "Chrome/151.0.0.0 Safari/537.36"
+    });
 
     /*
      * GeekJob не даёт очевидного URL для поиска именно QA-вакансий
      * (несколько вариантов вроде ?qs=QA и /vacancies/qa не сработали
      * при проверке) -- поэтому продолжаем брать общий поток вакансий
-     * и полагаемся на QA-фильтр. Но раньше читали только первую
+     * и полагаемся на QA-фильтр. Раньше читали только первую
      * страницу /vacancies -- теперь листаем дальше, пока не
-     * закончатся новые ссылки.
+     * закончатся новые ссылки. Сайт подтверждённо отдаёт 12 страниц
+     * (222 вакансии) на день проверки.
      */
-    const MAX_PAGES = 6;
+    const MAX_PAGES = 12;
 
     const jobs = [];
     const seenUrls = new Set();
@@ -144,6 +167,26 @@ async function getGeekJobJobs() {
                 console.log(
                     `⚠️ Failed to open ${url}: ${error.message}`
                 );
+
+                // Раньше здесь был голый break без дампа -- если
+                // сам переход не удался (а не просто 0 карточек),
+                // мы никогда не видели, что произошло. Теперь
+                // пробуем сохранить хотя бы текущее состояние
+                // страницы (может быть пустым, но пусть будет
+                // попытка вместо тишины).
+                try {
+                    await page.screenshot({
+                        path: `geekjob-page${pageNum}-goto-error.png`,
+                        fullPage: true
+                    });
+                    console.log(
+                        "📸 Saved goto-error screenshot"
+                    );
+                } catch (dumpError) {
+                    console.log(
+                        "⚠️ Could not save goto-error screenshot either"
+                    );
+                }
 
                 break;
             }

@@ -67,6 +67,7 @@ async function getWorkingNomadsJobs() {
 
         let rows = null;
         let count = 0;
+        let usedSelector = null;
 
         for (const selector of rowSelectors) {
             const candidate = page.locator(selector);
@@ -75,6 +76,7 @@ async function getWorkingNomadsJobs() {
             if (candidateCount > 0) {
                 rows = candidate;
                 count = candidateCount;
+                usedSelector = selector;
 
                 console.log(
                     `📋 Job rows found via "${selector}": ${count}`
@@ -82,6 +84,44 @@ async function getWorkingNomadsJobs() {
 
                 break;
             }
+        }
+
+        /*
+         * Добавлено 2026-09-22: этот источник держал ровно одно и то
+         * же число (51) каждый прогон много дней подряд -- сильный
+         * признак, что страница рендерит фиксированную порцию и
+         * подгружает остальное по скроллу (Angular-приложение,
+         * ng-binding в вёрстке). Скроллим вниз, пока число карточек
+         * не перестанет расти, прежде чем читать финальный список.
+         */
+        if (rows && usedSelector) {
+            let previousCount = count;
+
+            for (let scrollAttempt = 0; scrollAttempt < 20; scrollAttempt++) {
+                await page.evaluate(() => {
+                    window.scrollTo(0, document.body.scrollHeight);
+                });
+
+                await page.waitForTimeout(1000);
+
+                const newCount = await page.locator(usedSelector).count();
+
+                if (newCount <= previousCount) {
+                    console.log(
+                        `📋 Scroll stopped growing at ${newCount} rows (attempt ${scrollAttempt + 1})`
+                    );
+                    break;
+                }
+
+                previousCount = newCount;
+            }
+
+            rows = page.locator(usedSelector);
+            count = await rows.count();
+
+            console.log(
+                `📋 Job rows after scrolling: ${count}`
+            );
         }
 
         if (!rows || count === 0) {
