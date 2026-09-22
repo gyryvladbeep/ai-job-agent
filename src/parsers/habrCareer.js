@@ -1,304 +1,91 @@
-const { chromium } = require("playwright");
+const { runListScraper } = require("../core/listScraper");
+const { urlParamPager } = require("../core/pagination");
+const { isQaJob } = require("../utils/qaFilter");
 
-const QA_KEYWORDS = [
-    // English
-    "qa engineer",
-    "qa automation",
-    "automation qa",
-    "automation tester",
-    "automation test engineer",
-    "test engineer",
-    "test automation engineer",
-    "software tester",
-    "qa tester",
-    "quality assurance engineer",
-    "sdet",
-    "manual qa",
-    "manual tester",
-    "qa analyst",
-    "qa engineer",
-    "quality assurance",
-
-    // Russian
-    "тестировщик",
-    "тестировщик по",
-    "инженер по тестированию",
-    "специалист по тестированию",
-    "автоматизатор тестирования",
-    "инженер qa",
-    "инженер по качеству",
-    "инженер по качеству по",
-    "тест-инженер",
-    "тест инженер",
-    "инженер-тестировщик"
+/*
+ * Two categories, each paginated and deduped independently (a QA
+ * job could otherwise appear identically in both) -- this already
+ * walked multiple pages per category (an earlier fix), it just
+ * hadn't been folded into the shared core yet. Filters locally
+ * against the canonical QA classifier (see src/utils/qaFilter.js)
+ * so pagination can stop based on genuinely new links per page
+ * while the final job list only contains QA-relevant postings;
+ * this used to keep its own separate keyword list that had quietly
+ * drifted from the other three copies across the codebase.
+ */
+const CATEGORIES = [
+    "testirovshik",
+    "testirovschik_mobilnyh_prilozheniy"
 ];
 
-const EXCLUDED_KEYWORDS = [
-    // Analysts
-    "system analyst",
-    "business analyst",
-    "data analyst",
-    "product analyst",
-    "системный аналитик",
-    "бизнес-аналитик",
-    "аналитик данных",
-    "продуктовый аналитик",
+const MAX_PAGES_PER_CATEGORY = 6;
 
-    // Developers
-    "developer",
-    "software developer",
-    "backend developer",
-    "frontend developer",
-    "fullstack developer",
-    "full stack developer",
-    "web developer",
-    "разработчик",
-    "программист",
-    "backend",
-    "frontend",
-    "fullstack",
-
-    // DevOps / infrastructure
-    "devops",
-    "devops engineer",
-    "devsecops",
-    "sre",
-    "site reliability",
-
-    // Data / ML
-    "data scientist",
-    "machine learning engineer",
-    "ml engineer",
-    "data engineer",
-
-    // Management
-    "project manager",
-    "product manager",
-    "project lead",
-    "product lead",
-    "менеджер проекта",
-    "продакт-менеджер",
-
-    // Other
-    "designer",
-    "ui/ux",
-    "ux designer",
-    "recruiter",
-    "рекрутер",
-    "technical support",
-    "support engineer",
-    "техническая поддержка"
-];
-
-
-function normalizeText(text) {
-    return String(text || "")
-        .toLowerCase()
-        .replace(/ё/g, "е")
-        .replace(/\s+/g, " ")
-        .trim();
+function buildPageUrl(pageNum, entryPoint) {
+    const base = `https://career.habr.com/vacancies/${entryPoint.id}/full_time`;
+    return pageNum > 1 ? `${base}?page=${pageNum}` : base;
 }
 
+async function extractJob({ row, cleanText }) {
+    const href = await row.getAttribute("href").catch(() => null);
+    const text = await row.innerText().catch(() => "");
 
-function isQaPosition(position) {
-    const normalized = normalizeText(position);
-
-    const hasQaKeyword = QA_KEYWORDS.some(keyword =>
-        normalized.includes(normalizeText(keyword))
-    );
-
-    if (!hasQaKeyword) {
-        return false;
+    if (!href || !text) {
+        return null;
     }
 
-    const hasExcludedKeyword = EXCLUDED_KEYWORDS.some(keyword =>
-        normalized.includes(normalizeText(keyword))
-    );
+    // Только реальные ссылки на вакансии, не служебные /vacancies/... .
+    const isRealVacancyLink =
+        /^\/vacancies\/\d+/.test(href) ||
+        /^https:\/\/career\.habr\.com\/vacancies\/\d+/.test(href);
 
-    if (hasExcludedKeyword) {
-        return false;
+    if (!isRealVacancyLink) {
+        return null;
     }
 
-    return true;
-}
+    const position = cleanText(text);
+    const fullUrl = href.startsWith("http") ? href : `https://career.habr.com${href}`;
 
+    let company = "Unknown";
 
-async function getHabrCareerJobs() {
-    console.log("🌐 Opening Habr Career...");
+    const card = row.locator(
+        "xpath=ancestor::*[contains(@class, 'vacancy-card')][1]"
+    );
 
-    const browser = await chromium.launch({
-        headless: true
-    });
+    if (await card.count()) {
+        const companyLink = card.locator('a[href*="/companies/"]').first();
 
-    const page = await browser.newPage();
+        if (await companyLink.count()) {
+            const companyText = await companyLink.innerText().catch(() => "");
 
-    const categories = [
-        "testirovshik",
-        "testirovschik_mobilnyh_prilozheniy"
-    ];
-
-    // Раньше читали только первую страницу каждой категории -- на
-    // категории с активным набором это отрезает большую часть реально
-    // существующих вакансий. Теперь идём по страницам, пока не
-    // перестанут появляться новые ссылки (или до предохранительного
-    // лимита), а не останавливаемся после первой.
-    const MAX_PAGES_PER_CATEGORY = 6;
-
-    const jobs = [];
-
-    try {
-        for (const category of categories) {
-            const seenUrlsInCategory = new Set();
-
-            for (let pageNum = 1; pageNum <= MAX_PAGES_PER_CATEGORY; pageNum++) {
-                const url =
-                    `https://career.habr.com/vacancies/${category}/full_time` +
-                    (pageNum > 1 ? `?page=${pageNum}` : "");
-
-                console.log(`🔎 Parsing: ${url}`);
-
-                await page.goto(url, {
-                    waitUntil: "domcontentloaded",
-                    timeout: 30000
-                });
-
-                await page.waitForTimeout(1500);
-
-                const vacancyLinks = page.locator(
-                    'a[href*="/vacancies/"]'
-                );
-
-                const count = await vacancyLinks.count();
-
-                console.log(
-                    `📋 Page ${pageNum}: ${count} vacancy links found`
-                );
-
-                let newOnThisPage = 0;
-
-                for (let i = 0; i < count; i++) {
-                    const link = vacancyLinks.nth(i);
-
-                    const href = await link.getAttribute("href");
-                    const text = await link.innerText();
-
-                    if (!href || !text) {
-                        continue;
-                    }
-
-                    const title = text
-                        .replace(/\s+/g, " ")
-                        .trim();
-
-                    // Проверяем только реальные ссылки на вакансии
-                    if (
-                        !href.match(/^\/vacancies\/\d+/) &&
-                        !href.match(
-                            /^https:\/\/career\.habr\.com\/vacancies\/\d+/
-                        )
-                    ) {
-                        continue;
-                    }
-
-                    const fullUrl = href.startsWith("http")
-                        ? href
-                        : `https://career.habr.com${href}`;
-
-                    if (seenUrlsInCategory.has(fullUrl)) {
-                        continue;
-                    }
-
-                    seenUrlsInCategory.add(fullUrl);
-                    newOnThisPage++;
-
-                    // Главный QA-фильтр
-                    if (!isQaPosition(title)) {
-                        continue;
-                    }
-
-                    let company = "Unknown";
-
-                    try {
-                        // Название компании обычно лежит в соседнем
-                        // элементе карточки, а не в самой ссылке на
-                        // вакансию -- пробуем ближайший контейнер.
-                        const card = link.locator(
-                            "xpath=ancestor::*[contains(@class, 'vacancy-card')][1]"
-                        );
-
-                        if (await card.count()) {
-                            const companyLink = card
-                                .locator('a[href*="/companies/"]')
-                                .first();
-
-                            if (await companyLink.count()) {
-                                const companyText = await companyLink
-                                    .innerText()
-                                    .catch(() => "");
-
-                                if (companyText && companyText.trim()) {
-                                    company = companyText
-                                        .replace(/\s+/g, " ")
-                                        .trim();
-                                }
-                            }
-                        }
-                    } catch (error) {
-                        // Не критично -- просто оставляем "Unknown"
-                    }
-
-                    jobs.push({
-                        company,
-                        position: title,
-                        description: "",
-                        url: fullUrl,
-                        source: "Habr Career"
-                    });
-                }
-
-                // Если на странице не появилось ни одной новой ссылки
-                // на вакансию -- дальше листать некуда, страницы
-                // закончились.
-                if (newOnThisPage === 0) {
-                    console.log(
-                        `📋 No new links on page ${pageNum}, stopping category "${category}"`
-                    );
-                    break;
-                }
+            if (companyText && companyText.trim()) {
+                company = cleanText(companyText);
             }
         }
-
-        // Удаляем дубликаты
-        const uniqueJobs = [
-            ...new Map(
-                jobs.map(job => [job.url, job])
-            ).values()
-        ];
-
-        console.log(
-            `🎯 Habr Career QA jobs collected: ${uniqueJobs.length}`
-        );
-
-        console.table(uniqueJobs);
-
-        return uniqueJobs;
-
-    } catch (error) {
-        console.error(
-            "❌ Habr Career parser error:"
-        );
-
-        console.error(error.message);
-
-        return [];
-
-    } finally {
-        await browser.close();
     }
+
+    return { company, position, description: "", url: fullUrl };
 }
 
+async function getHabrCareerJobs() {
+    return runListScraper({
+        name: "Habr Career",
+        slug: "habr-career",
+        entryPoints: CATEGORIES.map(category => ({
+            id: category,
+            initialUrl: buildPageUrl(1, { id: category })
+        })),
+        rowSelector: 'a[href*="/vacancies/"]',
+        pagination: {
+            kind: "paged",
+            maxPages: MAX_PAGES_PER_CATEGORY,
+            advance: urlParamPager(buildPageUrl)
+        },
+        waitAfterLoadMs: 1500,
+        extractJob,
+        filterLocally: isQaJob
+    });
+}
 
 module.exports = {
-    getHabrCareerJobs,
-    isQaPosition
+    getHabrCareerJobs
 };

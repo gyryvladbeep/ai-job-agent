@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node index.js",
     "once": "node -e \"require('./src/index').processJobs()\"",
-    "debug:new-sources": "node src/debugNewSources.js"
+    "debug:new-sources": "node src/debugNewSources.js",
+    "check-sources": "node src/checkSources.js",
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",

@@ -1,15 +1,13 @@
 /*
  * Слушатель нажатий на кнопки статуса ("Applied" / "Skipped" /
  * "Interview") под уведомлениями о вакансиях -- превращает бота из
- * чистого оповещателя в лёгкий трекер воронки отклика: наконец
- * появляются реальные цифры "откликов -> собеседований", которых
- * не было за всю кампанию поиска.
+ * чистого оповещателя в лёгкий трекер воронки отклика.
  *
  * Отдельный экземпляр бота с polling:true -- специально не трогаем
  * общий bot из telegram.js (там polling:false, он только шлёт
  * сообщения при каждом прогоне скрейпера). Два независимых клиента
  * на одном токене конфликтуют, только если оба одновременно
- * поллят -- здесь поллит только этот, второй всегда molчит.
+ * поллят -- здесь поллит только этот, второй всегда молчит.
  *
  * Рассчитан на запуск внутри уже существующего долгоживущего
  * процесса (src/scheduler.js, тот же, что крутит cron) -- отдельно
@@ -20,10 +18,12 @@ require("dotenv").config();
 
 const TelegramBotModule = require("node-telegram-bot-api");
 
-const TelegramBot =
-    TelegramBotModule.default || TelegramBotModule;
+const TelegramBot = TelegramBotModule.default || TelegramBotModule;
 
 const { setVacancyStatus } = require("./supabase");
+const { createLogger } = require("../core/logger");
+
+const logger = createLogger("TelegramListener");
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -54,24 +54,18 @@ function parseCallbackData(data) {
 
 function startTelegramListener() {
     if (!token) {
-        console.log(
-            "⚠️ Telegram listener not started: TELEGRAM_BOT_TOKEN is not configured"
-        );
+        logger.warn("not started: TELEGRAM_BOT_TOKEN is not configured");
         return null;
     }
 
-    const listenerBot = new TelegramBot(token, {
-        polling: true
-    });
+    const listenerBot = new TelegramBot(token, { polling: true });
 
     listenerBot.on("callback_query", async (query) => {
         const parsed = parseCallbackData(query.data);
 
         if (!parsed) {
             await listenerBot
-                .answerCallbackQuery(query.id, {
-                    text: "Unrecognized button, ignored."
-                })
+                .answerCallbackQuery(query.id, { text: "Unrecognized button, ignored." })
                 .catch(() => {});
             return;
         }
@@ -98,27 +92,20 @@ function startTelegramListener() {
                     reply_markup: { inline_keyboard: [] }
                 }
             );
-
         } catch (error) {
-            console.error("❌ Telegram listener: failed to process callback");
-            console.error(error?.message || error);
+            logger.error(`failed to process callback: ${error?.message || error}`);
 
             await listenerBot
-                .answerCallbackQuery(query.id, {
-                    text: "Something went wrong, try again."
-                })
+                .answerCallbackQuery(query.id, { text: "Something went wrong, try again." })
                 .catch(() => {});
         }
     });
 
     listenerBot.on("polling_error", (error) => {
-        console.error("❌ Telegram listener polling error:");
-        console.error(error?.message || error);
+        logger.error(`polling error: ${error?.message || error}`);
     });
 
-    console.log(
-        "🎧 Telegram listener started -- status buttons (Applied/Skipped/Interview) are now live"
-    );
+    logger.info("started -- status buttons (Applied/Skipped/Interview) are now live");
 
     return listenerBot;
 }

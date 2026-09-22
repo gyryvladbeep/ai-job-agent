@@ -1,19 +1,6 @@
 require("dotenv").config();
 
-const { getTalantoJobs } = require("./parsers/talanto");
-const { getTelegramWebJobs } = require("./parsers/telegramWeb");
-const { getHabrCareerJobs } = require("./parsers/habrCareer");
-const { getGeekJobJobs } = require("./parsers/geekjob");
-const { getItaJobs } = require("./parsers/itaJobs");
-const { getRemoteOkJobs } = require("./parsers/remoteOk");
-const { getWellfoundJobs } = require("./parsers/wellfound");
-const { getWorkingNomadsJobs } = require("./parsers/workingNomads");
-const {
-    getMinistryOfTestingJobs
-} = require("./parsers/ministryOfTesting");
-const {
-    getCompanyBoardJobs
-} = require("./parsers/companyBoards");
+const { SOURCES } = require("./config/sources");
 
 const {
     jobExists,
@@ -24,76 +11,33 @@ const {
 
 const { sendJob } = require("./services/telegram");
 const { isVacancyLive } = require("./utils/isVacancyLive");
-
 const { filterQaJobs } = require("./utils/qaFilter");
-
+const { dedupeByUrl } = require("./core/dedupe");
+const { createLogger } = require("./core/logger");
 const { writeRunSummary } = require("./services/runLog");
 
+const logger = createLogger("Pipeline");
 
 async function collectFromSource(name, parser) {
-
-    console.log("");
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.log(`📡 Starting source: ${name}`);
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    logger.info("");
+    logger.info(`--- starting source: ${name} ---`);
 
     try {
-
         const jobs = await parser();
 
-        console.log(
-            `✅ ${name}: ${jobs.length} jobs collected`
-        );
+        logger.info(`${name}: ${jobs.length} jobs collected`);
 
         return jobs;
-
     } catch (error) {
-
-        console.error(
-            `❌ ${name} parser failed`
-        );
-
-        console.error(
-            error?.message || error
-        );
-
-        console.log(
-            "⚠️ Continuing with other sources..."
-        );
+        logger.error(`${name} parser failed: ${error?.message || error}`);
+        logger.warn("continuing with other sources...");
 
         return [];
     }
 }
 
-
 async function collectJobs() {
-
-    // ==========================================
-    // SOURCES
-    // ==========================================
-    //
-    // One entry per source -- add/remove a source here only, instead
-    // of a whole copy-pasted block. Order is just display order.
-    // ==========================================
-
-    const SOURCES = [
-        { name: "Talanto", parser: getTalantoJobs },
-        { name: "Telegram", parser: getTelegramWebJobs },
-        { name: "Habr Career", parser: getHabrCareerJobs },
-        { name: "GeekJob", parser: getGeekJobJobs },
-        { name: "ITA Jobs", parser: getItaJobs },
-        { name: "Remote OK", parser: getRemoteOkJobs },
-        { name: "Wellfound", parser: getWellfoundJobs },
-        { name: "Working Nomads", parser: getWorkingNomadsJobs },
-        { name: "Ministry of Testing", parser: getMinistryOfTestingJobs },
-        { name: "Direct Company Boards", parser: getCompanyBoardJobs }
-    ];
-
-    console.log("");
-    console.log(
-        "🔎 Collecting vacancies from all sources..."
-    );
-    console.log("");
+    logger.info("collecting vacancies from all sources...");
 
     const allJobs = [];
     const bySource = {};
@@ -106,21 +50,13 @@ async function collectJobs() {
         allJobs.push(...jobs);
     }
 
-    console.log("");
-    console.log("================================");
-    console.log(
-        `📦 TOTAL COLLECTED: ${allJobs.length}`
-    );
-    console.log("================================");
+    logger.info(`TOTAL COLLECTED: ${allJobs.length}`);
 
     return { allJobs, bySource };
 }
 
 async function processJobs() {
-
-    console.log("");
-    console.log("🚀 AI Job Agent started");
-    console.log("================================");
+    logger.info("AI Job Agent started");
 
     // Filled in as we go, written to logs/ no matter where the run
     // stops -- see src/services/runLog.js. This is what lets a run's
@@ -143,23 +79,17 @@ async function processJobs() {
     };
 
     try {
-
         // ==========================================
         // 1. COLLECT
         // ==========================================
 
-        const { allJobs: collectedJobs, bySource } =
-            await collectJobs();
+        const { allJobs: collectedJobs, bySource } = await collectJobs();
 
         runSummary.bySource = bySource;
         runSummary.collected = collectedJobs.length;
 
         if (collectedJobs.length === 0) {
-
-            console.log("");
-            console.log(
-                "ℹ️ No jobs collected from any source"
-            );
+            logger.info("no jobs collected from any source");
 
             runSummary.stoppedAt = "collect";
             writeRunSummary(runSummary);
@@ -167,35 +97,25 @@ async function processJobs() {
             return;
         }
 
-
         // ==========================================
         // 2. QA FILTER
         // ==========================================
 
-        console.log("");
-        console.log(
-            "🔎 Applying QA filter..."
-        );
+        logger.info("applying QA filter...");
 
-        const qaJobs =
-            filterQaJobs(
-                collectedJobs
-            );
+        const qaJobs = filterQaJobs(collectedJobs);
 
-        console.log(
-            `🎯 QA jobs after filtering: ${qaJobs.length}`
-        );
+        logger.info(`QA jobs after filtering: ${qaJobs.length}`);
 
         runSummary.qaFiltered = qaJobs.length;
 
         // Разбивка "прошло QA-фильтр" по источникам -- без неё
         // источник может честно собирать десятки вакансий (bySource
         // выглядит здоровым) и при этом ни одна не будет реальной
-        // QA-позицией (например, у сломанного поиска на сайте, когда
-        // он молча откатывается на нерелевантную подборку) -- и это
-        // останется незаметным, пока кто-то не полезет разбираться
-        // вручную. Именно так неделю не замечали, что Wellfound отдавал
-        // 45-51 вакансию в день, из которых 0 проходили QA-фильтр.
+        // QA-позицией -- и это останется незаметным, пока кто-то не
+        // полезет разбираться вручную. Именно так неделю не замечали,
+        // что Wellfound отдавал 45-51 вакансию в день, из которых 0
+        // проходили QA-фильтр.
         const qaFilteredBySource = {};
         for (const job of qaJobs) {
             const key = job.source || "Unknown";
@@ -203,12 +123,8 @@ async function processJobs() {
         }
         runSummary.qaFilteredBySource = qaFilteredBySource;
 
-
         if (qaJobs.length === 0) {
-
-            console.log(
-                "ℹ️ No QA jobs after filtering"
-            );
+            logger.info("no QA jobs after filtering");
 
             runSummary.stoppedAt = "qaFilter";
             writeRunSummary(runSummary);
@@ -216,84 +132,42 @@ async function processJobs() {
             return;
         }
 
-
         // ==========================================
         // 3. REMOVE DUPLICATES
         // ==========================================
 
-        console.log("");
-        console.log(
-            "🧹 Removing duplicates..."
-        );
+        logger.info("removing duplicates...");
 
-        const uniqueJobs = [
-            ...new Map(
-                qaJobs.map(job => [
-                    job.url,
-                    job
-                ])
-            ).values()
-        ];
+        const uniqueJobs = dedupeByUrl(qaJobs);
 
-        console.log(
-            `🧹 Unique jobs: ${uniqueJobs.length}`
-        );
+        logger.info(`unique jobs: ${uniqueJobs.length}`);
 
         runSummary.unique = uniqueJobs.length;
-
 
         // ==========================================
         // 4. CHECK SUPABASE
         // ==========================================
 
-        console.log("");
-        console.log(
-            "🗄️ Checking Supabase..."
-        );
+        logger.info("checking Supabase...");
 
         const newJobs = [];
 
-
         for (const job of uniqueJobs) {
-
             try {
-
-                const exists =
-                    await jobExists(
-                        job.url
-                    );
-
+                const exists = await jobExists(job.url);
 
                 if (exists) {
-
-                    console.log(
-                        `⏭️ Already exists: ${job.company} — ${job.position}`
-                    );
-
+                    logger.info(`already exists: ${job.company} -- ${job.position}`);
                     continue;
                 }
 
-
                 newJobs.push(job);
-
             } catch (error) {
-
-                console.error(
-                    `❌ Supabase check failed for: ${job.position}`
-                );
-
-                console.error(
-                    error?.message || error
-                );
+                logger.error(`Supabase check failed for: ${job.position}: ${error?.message || error}`);
             }
         }
 
-
-        console.log("");
-
-        console.log(
-            `🆕 New jobs found: ${newJobs.length}`
-        );
+        logger.info(`new jobs found: ${newJobs.length}`);
 
         runSummary.new = newJobs.length;
 
@@ -309,12 +183,8 @@ async function processJobs() {
         }
         runSummary.newBySource = newBySource;
 
-
         if (newJobs.length === 0) {
-
-            console.log(
-                "ℹ️ No new jobs to save or send"
-            );
+            logger.info("no new jobs to save or send");
 
             runSummary.stoppedAt = "dedupe";
             writeRunSummary(runSummary);
@@ -322,41 +192,22 @@ async function processJobs() {
             return;
         }
 
-
         // ==========================================
         // 5. SAVE TO SUPABASE
         // ==========================================
 
-        console.log("");
-        console.log(
-            "💾 Saving jobs to Supabase..."
-        );
+        logger.info("saving jobs to Supabase...");
 
         let savedJobs = [];
 
-
         try {
+            savedJobs = await saveJobs(newJobs);
 
-            savedJobs =
-                await saveJobs(
-                    newJobs
-                );
-
-            console.log(
-                `💾 Saved to Supabase: ${savedJobs.length}`
-            );
+            logger.info(`saved to Supabase: ${savedJobs.length}`);
 
             runSummary.saved = savedJobs.length;
-
         } catch (error) {
-
-            console.error(
-                "❌ Failed to save jobs to Supabase"
-            );
-
-            console.error(
-                error?.message || error
-            );
+            logger.error(`failed to save jobs to Supabase: ${error?.message || error}`);
 
             runSummary.stoppedAt = "save";
             runSummary.error = error?.message || String(error);
@@ -365,26 +216,18 @@ async function processJobs() {
             return;
         }
 
-
         // ==========================================
         // 6. TELEGRAM NOTIFICATIONS
         // ==========================================
 
-        console.log("");
-        console.log(
-            `📨 Sending ${savedJobs.length} Telegram notifications...`
-        );
-
+        logger.info(`sending ${savedJobs.length} Telegram notifications...`);
 
         let notified = 0;
         let failed = 0;
         let expired = 0;
 
-
         for (const job of savedJobs) {
-
             try {
-
                 // Best-effort проверка "вакансия ещё жива" прямо перед
                 // отправкой -- fail-open (любая ошибка проверки = считаем
                 // живой), так что она может только пропустить лишнее
@@ -393,45 +236,25 @@ async function processJobs() {
                 const stillLive = await isVacancyLive(job.url);
 
                 if (!stillLive) {
-
                     expired++;
 
                     await markAsExpired(job.id);
 
-                    console.log(
-                        `⏭️ Skipped (looks closed): ${job.company} — ${job.position}`
-                    );
+                    logger.info(`skipped (looks closed): ${job.company} -- ${job.position}`);
 
                     continue;
                 }
 
                 await sendJob(job);
-
-
-                await markAsNotified(
-                    job.id
-                );
-
+                await markAsNotified(job.id);
 
                 notified++;
 
-
-                console.log(
-                    `✅ Notified: ${job.company} — ${job.position}`
-                );
-
+                logger.info(`notified: ${job.company} -- ${job.position}`);
             } catch (error) {
-
                 failed++;
 
-
-                console.error(
-                    `❌ Notification failed: ${job.company} — ${job.position}`
-                );
-
-                console.error(
-                    error?.message || error
-                );
+                logger.error(`notification failed: ${job.company} -- ${job.position}: ${error?.message || error}`);
             }
         }
 
@@ -440,78 +263,32 @@ async function processJobs() {
         runSummary.expired = expired;
         runSummary.stoppedAt = "complete";
 
-
         // ==========================================
         // 7. FINAL SUMMARY
         // ==========================================
 
-        console.log("");
-        console.log("================================");
-        console.log("📊 RUN SUMMARY");
-        console.log("================================");
-
-        console.log(
-            `📦 Collected: ${collectedJobs.length}`
-        );
-
-        console.log(
-            `🎯 QA jobs: ${qaJobs.length}`
-        );
-
-        console.log(
-            `🧹 Unique: ${uniqueJobs.length}`
-        );
-
-        console.log(
-            `🆕 New: ${newJobs.length}`
-        );
-
-        console.log(
-            `💾 Saved: ${savedJobs.length}`
-        );
-
-        console.log(
-            `📨 Notified: ${notified}`
-        );
-
-        console.log(
-            `⏭️ Skipped as expired: ${expired}`
-        );
-
-        console.log(
-            `❌ Notification errors: ${failed}`
-        );
-
-        console.log("================================");
+        logger.info("RUN SUMMARY");
+        logger.info(`collected: ${collectedJobs.length}`);
+        logger.info(`QA jobs: ${qaJobs.length}`);
+        logger.info(`unique: ${uniqueJobs.length}`);
+        logger.info(`new: ${newJobs.length}`);
+        logger.info(`saved: ${savedJobs.length}`);
+        logger.info(`notified: ${notified}`);
+        logger.info(`skipped as expired: ${expired}`);
+        logger.info(`notification errors: ${failed}`);
 
         writeRunSummary(runSummary);
-
-
     } catch (error) {
-
-        console.error("");
-        console.error(
-            "❌ AI Job Agent fatal error:"
-        );
-
-        console.error(
-            error?.message || error
-        );
+        logger.error(`fatal error: ${error?.message || error}`);
 
         runSummary.stoppedAt = "fatal";
         runSummary.error = error?.message || String(error);
         writeRunSummary(runSummary);
     }
 
-
-    console.log("");
-    console.log(
-        "🏁 AI Job Agent finished"
-    );
-    console.log("");
+    logger.info("AI Job Agent finished");
 }
 
-
 module.exports = {
-    processJobs,
+    processJobs
 };

@@ -2,13 +2,13 @@ require("dotenv").config();
 
 const TelegramBotModule = require("node-telegram-bot-api");
 
-const TelegramBot =
-    TelegramBotModule.default || TelegramBotModule;
+const TelegramBot = TelegramBotModule.default || TelegramBotModule;
 
 const { hasRelocationSignal } = require("../utils/relocationTag");
-const {
-    buildRecruiterSearchLink
-} = require("../utils/recruiterSearchLink");
+const { buildRecruiterSearchLink } = require("../utils/recruiterSearchLink");
+const { createLogger } = require("../core/logger");
+
+const logger = createLogger("Telegram");
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -21,9 +21,7 @@ if (!chatId) {
     throw new Error("TELEGRAM_CHAT_ID is not configured");
 }
 
-const bot = new TelegramBot(token, {
-    polling: false
-});
+const bot = new TelegramBot(token, { polling: false });
 
 function buildMessage(job) {
     const lines = [
@@ -89,15 +87,11 @@ async function sendJob(job) {
             reply_markup: buildStatusKeyboard(job.id)
         });
 
-        console.log(
-            `Telegram notification sent: ${job.company} -- ${job.position}`
-        );
+        logger.info(`notification sent: ${job.company} -- ${job.position}`);
 
         return true;
-
     } catch (error) {
-        console.error("Telegram error:");
-        console.error(error.message);
+        logger.error(`send failed: ${error?.message || error}`);
 
         return false;
     }

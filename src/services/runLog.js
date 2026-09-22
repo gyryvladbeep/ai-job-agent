@@ -1,6 +1,10 @@
 const fs = require("fs");
 const path = require("path");
 
+const { createLogger } = require("../core/logger");
+
+const logger = createLogger("RunLog");
+
 // Persists a machine-readable summary of every run to disk (last-run.json
 // always has the most recent run; run-history.log appends one line per
 // run). This exists so a run's per-source numbers are still inspectable
@@ -37,8 +41,7 @@ function writeRunSummary(summary) {
             "utf-8"
         );
     } catch (error) {
-        console.log("⚠️ Could not write run log");
-        console.log(error?.message || error);
+        logger.warn(`could not write run log: ${error?.message || error}`);
     }
 }
 

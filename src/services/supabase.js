@@ -1,6 +1,9 @@
 require("dotenv").config();
 
 const { createClient } = require("@supabase/supabase-js");
+const { createLogger } = require("../core/logger");
+
+const logger = createLogger("Supabase");
 
 const supabase = createClient(
     process.env.SUPABASE_URL,
@@ -16,8 +19,7 @@ async function jobExists(url) {
         .maybeSingle();
 
     if (error) {
-        console.error("❌ Error checking vacancy:");
-        console.error(error);
+        logger.error("error checking vacancy:", error);
         return false;
     }
 
@@ -27,7 +29,7 @@ async function jobExists(url) {
 // Сохраняем новые вакансии
 async function saveJobs(jobs) {
     if (!jobs || jobs.length === 0) {
-        console.log("ℹ️ No jobs to save");
+        logger.info("no jobs to save");
         return [];
     }
 
@@ -46,12 +48,11 @@ async function saveJobs(jobs) {
         .select();
 
     if (error) {
-        console.error("❌ Error saving jobs:");
-        console.error(error);
+        logger.error("error saving jobs:", error);
         return [];
     }
 
-    console.log(`✅ Saved ${data.length} jobs to Supabase`);
+    logger.info(`saved ${data.length} jobs to Supabase`);
 
     return data;
 }
@@ -60,18 +61,15 @@ async function saveJobs(jobs) {
 async function markAsNotified(id) {
     const { error } = await supabase
         .from("vacancies")
-        .update({
-            status: "notified"
-        })
+        .update({ status: "notified" })
         .eq("id", id);
 
     if (error) {
-        console.error("❌ Error updating vacancy status:");
-        console.error(error);
+        logger.error("error updating vacancy status:", error);
         return false;
     }
 
-    console.log(`✅ Vacancy ${id} marked as notified`);
+    logger.info(`vacancy ${id} marked as notified`);
 
     return true;
 }
@@ -80,18 +78,15 @@ async function markAsNotified(id) {
 async function markAsFailed(id) {
     const { error } = await supabase
         .from("vacancies")
-        .update({
-            status: "failed"
-        })
+        .update({ status: "failed" })
         .eq("id", id);
 
     if (error) {
-        console.error("❌ Error marking vacancy as failed:");
-        console.error(error);
+        logger.error("error marking vacancy as failed:", error);
         return false;
     }
 
-    console.log(`⚠️ Vacancy ${id} marked as failed`);
+    logger.warn(`vacancy ${id} marked as failed`);
 
     return true;
 }
@@ -103,18 +98,15 @@ async function markAsFailed(id) {
 async function markAsExpired(id) {
     const { error } = await supabase
         .from("vacancies")
-        .update({
-            status: "expired"
-        })
+        .update({ status: "expired" })
         .eq("id", id);
 
     if (error) {
-        console.error("❌ Error marking vacancy as expired:");
-        console.error(error);
+        logger.error("error marking vacancy as expired:", error);
         return false;
     }
 
-    console.log(`⚠️ Vacancy ${id} marked as expired`);
+    logger.warn(`vacancy ${id} marked as expired`);
 
     return true;
 }
@@ -126,18 +118,15 @@ async function markAsExpired(id) {
 async function setVacancyStatus(id, status) {
     const { error } = await supabase
         .from("vacancies")
-        .update({
-            status
-        })
+        .update({ status })
         .eq("id", id);
 
     if (error) {
-        console.error(`❌ Error setting vacancy ${id} status to "${status}":`);
-        console.error(error);
+        logger.error(`error setting vacancy ${id} status to "${status}":`, error);
         return false;
     }
 
-    console.log(`✅ Vacancy ${id} status set to "${status}"`);
+    logger.info(`vacancy ${id} status set to "${status}"`);
 
     return true;
 }

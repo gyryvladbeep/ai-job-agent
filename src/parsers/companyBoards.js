@@ -1,10 +1,14 @@
+const { createLogger } = require("../core/logger");
+const { withRetry } = require("../core/retry");
+const { dedupeByUrl } = require("../core/dedupe");
+
 /*
  * Прямой мониторинг карьерных страниц конкретных компаний вместо
  * агрегаторов -- обходит шум ATS-агрегаторов и даёт доступ к
  * "скрытому" рынку вакансий напрямую у работодателя.
  *
- * Все компании ниже проверены вручную (WebFetch, 2026-09-18): у
- * каждой подтверждён рабочий публичный JSON API её ATS (Greenhouse
+ * Все компании ниже проверены вручную (WebFetch) перед добавлением:
+ * у каждой подтверждён рабочий публичный JSON API её ATS (Greenhouse
  * или Ashby), поэтому здесь не нужен Playwright/браузер вообще --
  * просто fetch + JSON. Быстрее и надёжнее DOM-скрейпинга, и такие
  * API не подвержены Cloudflare-блокам, с которыми боремся у других
@@ -25,15 +29,6 @@ const GREENHOUSE_BOARDS = [
     { slug: "gitlab", company: "GitLab" },
     { slug: "smartbear", company: "SmartBear" },
     { slug: "canonical", company: "Canonical" },
-
-    // Добавлено 2026-09-19 -- список из 40 кандидатов, каждый slug
-    // проверен вручную (WebFetch) перед добавлением. 12 кандидатов
-    // не нашли рабочей доски ни на Greenhouse, ни на Ashby, ни на
-    // Lever (Monday.com, ClickUp, Miro, Retool, Snyk, 1Password,
-    // DigitalOcean, Codecov, Sentry, Chargebee, Rippling, Loom) --
-    // не угадываю их API дальше, у них либо кастомный сайт, либо
-    // Workday/другая закрытая система, для которой нужен отдельный
-    // DOM-парсер, а не эта generic-схема.
     { slug: "figma", company: "Figma" },
     { slug: "airtable", company: "Airtable" },
     { slug: "asana", company: "Asana" },
@@ -56,9 +51,6 @@ const GREENHOUSE_BOARDS = [
     { slug: "gusto", company: "Gusto" },
     { slug: "calendly", company: "Calendly" },
     { slug: "typeform", company: "Typeform" },
-
-    // Добавлено 2026-09-19 (второй раунд) -- ещё 50+ кандидатов
-    // проверено вручную (WebFetch) перед добавлением на этот раз.
     { slug: "intercom", company: "Intercom" },
     { slug: "algolia", company: "Algolia" },
     { slug: "contentful", company: "Contentful" },
@@ -90,16 +82,12 @@ const GREENHOUSE_BOARDS = [
 const ASHBY_BOARDS = [
     { slug: "confluent", company: "Confluent" },
     { slug: "zapier", company: "Zapier" },
-
-    // Добавлено 2026-09-19, тоже проверено вручную.
     { slug: "notion", company: "Notion" },
     { slug: "linear", company: "Linear" },
     { slug: "render", company: "Render" },
     { slug: "ramp", company: "Ramp" },
     { slug: "plaid", company: "Plaid" },
     { slug: "deel", company: "Deel" },
-
-    // Добавлено 2026-09-19 (второй раунд), тоже проверено вручную.
     { slug: "openai", company: "OpenAI" },
     { slug: "vanta", company: "Vanta" },
     { slug: "posthog", company: "PostHog" },
@@ -142,46 +130,46 @@ function stripHtml(html) {
         .trim();
 }
 
-async function fetchJson(url) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+async function fetchJson(url, logger) {
+    return withRetry(
+        async () => {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-    try {
-        const response = await fetch(url, {
-            signal: controller.signal,
-            headers: {
-                "User-Agent":
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-                    "AppleWebKit/537.36 (KHTML, like Gecko) " +
-                    "Chrome/151.0.0.0 Safari/537.36"
+            try {
+                const response = await fetch(url, {
+                    signal: controller.signal,
+                    headers: {
+                        "User-Agent":
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+                            "AppleWebKit/537.36 (KHTML, like Gecko) " +
+                            "Chrome/151.0.0.0 Safari/537.36"
+                    }
+                });
+
+                if (!response.ok) {
+                    // Не ретраим осознанные HTTP-ошибки (404 на
+                    // несуществующей доске и т.п.) -- только реальные
+                    // сетевые сбои ниже, в catch.
+                    logger.warn(`${url}: HTTP ${response.status}`);
+                    return null;
+                }
+
+                return await response.json();
+            } finally {
+                clearTimeout(timer);
             }
-        });
-
-        if (!response.ok) {
-            console.log(
-                `⚠️ ${url}: HTTP ${response.status}`
-            );
-            return null;
-        }
-
-        return await response.json();
-
-    } catch (error) {
-        console.log(
-            `⚠️ ${url}: request failed -- ${error?.message || error}`
-        );
+        },
+        { attempts: 2, baseDelayMs: 1000, label: url, logger }
+    ).catch(error => {
+        logger.warn(`${url}: request failed -- ${error?.message || error}`);
         return null;
-
-    } finally {
-        clearTimeout(timer);
-    }
+    });
 }
 
-async function fetchGreenhouseBoard({ slug, company }) {
-    const url =
-        `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs?content=true`;
-
-    const data = await fetchJson(url);
+async function fetchGreenhouseBoard({ slug, company }, logger) {
+    const url = `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs?content=true`;
+    const data = await fetchJson(url, logger);
 
     if (!data || !Array.isArray(data.jobs)) {
         return [];
@@ -196,11 +184,9 @@ async function fetchGreenhouseBoard({ slug, company }) {
     }));
 }
 
-async function fetchAshbyBoard({ slug, company }) {
-    const url =
-        `https://api.ashbyhq.com/posting-api/job-board/${slug}`;
-
-    const data = await fetchJson(url);
+async function fetchAshbyBoard({ slug, company }, logger) {
+    const url = `https://api.ashbyhq.com/posting-api/job-board/${slug}`;
+    const data = await fetchJson(url, logger);
 
     if (!data || !Array.isArray(data.jobs)) {
         return [];
@@ -216,26 +202,27 @@ async function fetchAshbyBoard({ slug, company }) {
 }
 
 async function getCompanyBoardJobs() {
-    console.log("🌐 Checking direct company career boards...");
+    const logger = createLogger("Direct Company Boards");
+
+    logger.info("checking direct company career boards...");
 
     const results = await Promise.all([
-        ...GREENHOUSE_BOARDS.map(fetchGreenhouseBoard),
-        ...ASHBY_BOARDS.map(fetchAshbyBoard)
+        ...GREENHOUSE_BOARDS.map(board => fetchGreenhouseBoard(board, logger)),
+        ...ASHBY_BOARDS.map(board => fetchAshbyBoard(board, logger))
     ]);
 
     const jobs = results.flat().filter(job => job.position && job.url);
+    const uniqueJobs = dedupeByUrl(jobs);
 
-    const uniqueJobs = [
-        ...new Map(jobs.map(job => [job.url, job])).values()
-    ];
-
-    console.log(
-        `🎯 Direct company boards: ${uniqueJobs.length} jobs collected across ${GREENHOUSE_BOARDS.length + ASHBY_BOARDS.length} companies`
+    logger.info(
+        `${uniqueJobs.length} jobs collected across ${GREENHOUSE_BOARDS.length + ASHBY_BOARDS.length} companies`
     );
 
     return uniqueJobs;
 }
 
 module.exports = {
-    getCompanyBoardJobs
+    getCompanyBoardJobs,
+    GREENHOUSE_BOARDS,
+    ASHBY_BOARDS
 };
