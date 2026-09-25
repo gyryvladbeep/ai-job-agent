@@ -131,6 +131,67 @@ async function setVacancyStatus(id, status) {
     return true;
 }
 
+// Возвращаем ВСЕ вакансии из таблицы -- нужно для разовых массовых
+// проверок вроде src/recheckVacancies.js. Supabase/PostgREST отдаёт
+// максимум 1000 строк за один select, поэтому листаем через .range(),
+// пока не придёт страница короче PAGE_SIZE.
+async function getAllVacancies() {
+    const PAGE_SIZE = 1000;
+    const all = [];
+    let from = 0;
+
+    for (;;) {
+        const to = from + PAGE_SIZE - 1;
+
+        const { data, error } = await supabase
+            .from("vacancies")
+            .select("*")
+            .order("id", { ascending: true })
+            .range(from, to);
+
+        if (error) {
+            logger.error("error fetching all vacancies:", error);
+            break;
+        }
+
+        if (!data || data.length === 0) {
+            break;
+        }
+
+        all.push(...data);
+
+        if (data.length < PAGE_SIZE) {
+            break;
+        }
+
+        from += PAGE_SIZE;
+    }
+
+    logger.info(`fetched ${all.length} vacancies total`);
+
+    return all;
+}
+
+// Безвозвратно удаляем вакансию из базы -- используется при разовой
+// чистке (src/recheckVacancies.js), когда повторная проверка
+// показала, что вакансия больше не актуальна и хранить запись дальше
+// нет смысла.
+async function deleteJob(id) {
+    const { error } = await supabase
+        .from("vacancies")
+        .delete()
+        .eq("id", id);
+
+    if (error) {
+        logger.error(`error deleting vacancy ${id}:`, error);
+        return false;
+    }
+
+    logger.warn(`vacancy ${id} deleted`);
+
+    return true;
+}
+
 module.exports = {
     supabase,
     jobExists,
@@ -138,5 +199,7 @@ module.exports = {
     markAsNotified,
     markAsFailed,
     markAsExpired,
-    setVacancyStatus
+    setVacancyStatus,
+    getAllVacancies,
+    deleteJob
 };

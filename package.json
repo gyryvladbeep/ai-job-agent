@@ -8,6 +8,7 @@
     "once": "node -e \"require('./src/index').processJobs()\"",
     "debug:new-sources": "node src/debugNewSources.js",
     "check-sources": "node src/checkSources.js",
+    "recheck": "node src/recheckVacancies.js",
     "test": "node --test"
   },
   "keywords": [],
