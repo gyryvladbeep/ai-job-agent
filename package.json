@@ -9,6 +9,7 @@
     "debug:new-sources": "node src/debugNewSources.js",
     "check-sources": "node src/checkSources.js",
     "recheck": "node src/recheckVacancies.js",
+    "clear-vacancies": "node src/clearVacancies.js",
     "test": "node --test"
   },
   "keywords": [],

@@ -132,9 +132,10 @@ async function setVacancyStatus(id, status) {
 }
 
 // Возвращаем ВСЕ вакансии из таблицы -- нужно для разовых массовых
-// проверок вроде src/recheckVacancies.js. Supabase/PostgREST отдаёт
-// максимум 1000 строк за один select, поэтому листаем через .range(),
-// пока не придёт страница короче PAGE_SIZE.
+// проверок вроде src/recheckVacancies.js и src/clearVacancies.js.
+// Supabase/PostgREST отдаёт максимум 1000 строк за один select,
+// поэтому листаем через .range(), пока не придёт страница короче
+// PAGE_SIZE.
 async function getAllVacancies() {
     const PAGE_SIZE = 1000;
     const all = [];
@@ -192,6 +193,29 @@ async function deleteJob(id) {
     return true;
 }
 
+// Безвозвратно удаляем ВСЕ строки таблицы одним запросом -- полная
+// очистка базы (src/clearVacancies.js), когда пользователь закрыл
+// поиск и вся таблица целиком больше не нужна. В отличие от
+// deleteJob(id) это массовая операция, а не удаление одной записи;
+// .not("id", "is", null) -- стандартный приём Supabase для "удалить
+// все строки без исключения" (PostgREST отклоняет delete() вообще
+// без фильтра).
+async function deleteAllVacancies() {
+    const { error, count } = await supabase
+        .from("vacancies")
+        .delete({ count: "exact" })
+        .not("id", "is", null);
+
+    if (error) {
+        logger.error("error deleting all vacancies:", error);
+        return { ok: false, count: 0 };
+    }
+
+    logger.warn(`deleted all vacancies (${count ?? "unknown"} rows)`);
+
+    return { ok: true, count: count ?? 0 };
+}
+
 module.exports = {
     supabase,
     jobExists,
@@ -201,5 +225,6 @@ module.exports = {
     markAsExpired,
     setVacancyStatus,
     getAllVacancies,
-    deleteJob
+    deleteJob,
+    deleteAllVacancies
 };
